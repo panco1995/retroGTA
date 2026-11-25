@@ -4,6 +4,15 @@
 
 A GTA-like game prototype built with Three.js. Geometry is generated in code. The playable area is the east island.
 
+## Screenshots
+
+Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
+
+<p>
+  <img src="docs/follow.png" alt="Follow camera outside the safehouse" width="49%">
+  <img src="docs/iso.png" alt="2.5D camera outside the safehouse" width="49%">
+</p>
+
 ## Implemented
 
 - Walk, run, enter a car, drive, brake, and exit

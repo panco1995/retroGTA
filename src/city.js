@@ -1013,5 +1013,10 @@ const platW = Math.min(w * 0.34, 2.4);
       if (trainZ < MAP.train.minZ) trainDir = 1;
       el.train.position.z = trainZ;
     },
+    reset() {
+      trainZ = MAP.train.startZ;
+      trainDir = 1;
+      el.train.position.z = trainZ;
+    },
   };
 }

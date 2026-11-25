@@ -6,7 +6,8 @@ import { blocked, moveCircle } from './collision.js';
 import { animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
-import { onLangChange, t } from './i18n.js';
+import { onLangChange, t, toggleLang } from './i18n.js';
+import { openMainMenu } from './menu.js';
 
 const ENTER_DIST = 4.8;
 
@@ -82,10 +83,21 @@ export function createGame(canvas) {
   });
 
   const hero = world.vehicles.find((v) => v.driveable);
+  const vehicleHome = world.vehicles.map((vehicle) => ({
+    vehicle,
+    x: vehicle.x,
+    z: vehicle.z,
+    heading: vehicle.heading,
+    y: vehicle.y,
+    pitch: vehicle.pitch,
+  }));
+  const pedHome = peds.map((ped) => ({ x: ped.x, z: ped.z, heading: ped.heading }));
   const input = createInput(canvas);
   const minimap = createMinimap(document.getElementById('map'), world);
 
   let started = false;
+  let paused = false;
+  let suppressEsc = false;
   let mode = 'foot';
   let view = 'follow';
   let yaw = Math.PI;
@@ -98,7 +110,70 @@ export function createGame(canvas) {
   const speedEl = document.getElementById('speed');
   const hintEl = document.getElementById('hint');
   const promptEl = document.getElementById('prompt');
-  const bootEl = document.getElementById('boot');
+  const menuEl = document.getElementById('menu');
+  const hudEl = document.getElementById('hud');
+  const pauseEl = document.getElementById('pause');
+
+  function placeOnFoot(actor, x, z, heading) {
+    actor.x = x;
+    actor.z = z;
+    actor.heading = heading;
+    actor.group.position.set(x, WALK_TOP + world.ground(x, z), z);
+    actor.group.rotation.set(0, heading, 0);
+  }
+
+  function resetSession() {
+    if (mode === 'drive') {
+      scene.attach(player.group);
+      setPose(player, 'stand');
+    }
+    mode = 'foot';
+    view = 'follow';
+    placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
+    yaw = spawn.heading;
+    pitch = 0.3;
+    camReady = false;
+    for (const home of vehicleHome) {
+      home.vehicle.x = home.x;
+      home.vehicle.z = home.z;
+      home.vehicle.heading = home.heading;
+      home.vehicle.y = home.y;
+      home.vehicle.pitch = home.pitch;
+      home.vehicle.speed = 0;
+      home.vehicle.steer = 0;
+      home.vehicle.braking = false;
+      home.vehicle.sync();
+    }
+    peds.forEach((ped, index) => {
+      const home = pedHome[index];
+      ped.index = 0;
+      ped.dir = 1;
+      placeOnFoot(ped, home.x, home.z, home.heading);
+      setPose(ped, 'stand');
+    });
+    world.reset();
+    input.release();
+  }
+
+  function openPause() {
+    if (!started || paused) return;
+    paused = true;
+    suppressEsc = true;
+    document.exitPointerLock();
+    pauseEl.classList.remove('hidden');
+    input.release();
+    setTimeout(() => {
+      suppressEsc = false;
+    }, 250);
+  }
+
+  function closePause() {
+    if (!paused) return;
+    paused = false;
+    pauseEl.classList.add('hidden');
+    input.release();
+    if (view === 'follow') input.lock();
+  }
 
   function carHits(vehicle, x, z, cols) {
   const fx = Math.sin(vehicle.heading);
@@ -339,7 +414,7 @@ function collidersFor(includeHero) {
   function updateHud() {
     if (!started) {
       setText(speedEl, '');
-      setText(hintEl, t('clickToStart'));
+      setText(hintEl, '');
       promptEl.style.opacity = '0';
       return;
     }
@@ -368,15 +443,48 @@ function collidersFor(includeHero) {
   });
 
   canvas.addEventListener('click', () => {
-    if (started && view === 'follow') input.lock();
+    if (started && !paused && view === 'follow') input.lock();
   });
 
-  bootEl.addEventListener('click', () => {
+  document.getElementById('menu-start').addEventListener('click', () => {
+    if (started) return;
     started = true;
-    bootEl.classList.add('hidden');
+    menuEl.classList.add('hidden');
+    hudEl.classList.remove('hidden');
     yaw = player.heading;
     pitch = 0.3;
     input.lock();
+  });
+
+  document.getElementById('pause-lang').addEventListener('click', () => toggleLang());
+  document.getElementById('pause-restart').addEventListener('click', () => {
+    resetSession();
+    closePause();
+  });
+  document.getElementById('pause-exit').addEventListener('click', () => {
+    resetSession();
+    paused = false;
+    started = false;
+    pauseEl.classList.add('hidden');
+    hudEl.classList.add('hidden');
+    menuEl.classList.remove('hidden');
+    openMainMenu();
+    document.exitPointerLock();
+    input.release();
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.code !== 'Escape' || event.repeat) return;
+    if (!started || suppressEsc) return;
+    event.preventDefault();
+    if (paused) closePause();
+    else openPause();
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === canvas) return;
+    if (!started || paused || view !== 'follow') return;
+    openPause();
   });
 
   window.addEventListener('resize', () => {
@@ -394,6 +502,12 @@ function collidersFor(includeHero) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     elapsed += dt;
+
+    if (paused) {
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+      return;
+    }
 
     if (started && input.consume('KeyV')) {
       view = view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow';

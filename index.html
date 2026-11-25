@@ -10,7 +10,7 @@
   <body>
     <canvas id="c"></canvas>
 
-    <div id="hud">
+    <div id="hud" class="hidden">
       <div id="place-wrap">
         <div id="place" data-i18n="place"></div>
         <div id="sub" data-i18n="sub"></div>
@@ -21,29 +21,47 @@
       <div id="prompt"></div>
     </div>
 
-    <button id="boot" type="button">
-      <div class="boot-card">
+    <div id="menu">
+      <div class="menu-card">
         <div class="boot-kicker" data-i18n="bootKicker"></div>
         <div class="boot-title">retroGTA</div>
-        <div class="boot-copy" data-i18n="bootCopy"></div>
-        <div class="boot-keys" data-i18n="bootKeys"></div>
+        <nav id="menu-home" class="menu-list">
+          <button type="button" id="menu-start" data-i18n="menuStart"></button>
+          <button type="button" data-menu="settings" data-i18n="menuSettings"></button>
+          <button type="button" data-menu="about" data-i18n="menuAbout"></button>
+        </nav>
+        <section id="menu-settings" class="menu-panel" hidden>
+          <div class="settings-label" data-i18n="language"></div>
+          <div id="lang" role="group">
+            <button type="button" data-lang="en">EN</button>
+            <button type="button" data-lang="zh">中文</button>
+          </div>
+          <button type="button" class="menu-back" data-menu="home" data-i18n="menuBack"></button>
+        </section>
+        <section id="menu-about" class="menu-panel" hidden>
+          <p class="about-copy" data-i18n="aboutCopy"></p>
+          <p class="boot-keys" data-i18n="bootKeys"></p>
+          <button type="button" class="menu-back" data-menu="home" data-i18n="menuBack"></button>
+        </section>
       </div>
-    </button>
+    </div>
 
-    <div id="settings">
-      <button id="settings-toggle" type="button" data-i18n-aria="settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
-      <div id="settings-panel" hidden>
-        <div class="settings-label" data-i18n="language"></div>
-        <div id="lang" role="group">
-          <button type="button" data-lang="en">EN</button>
-          <button type="button" data-lang="zh">中文</button>
-        </div>
+    <div id="pause" class="hidden">
+      <div class="menu-card">
+        <div class="boot-title" data-i18n="pauseTitle"></div>
+        <nav class="menu-list">
+          <button type="button" id="pause-lang" data-i18n="pauseLang"></button>
+          <button type="button" id="pause-restart" data-i18n="pauseRestart"></button>
+          <button type="button" id="pause-exit" data-i18n="pauseExit"></button>
+        </nav>
       </div>
     </div>
 
     <script type="module">
       import { initI18n } from '/src/i18n.js';
+      import { initMenu } from '/src/menu.js';
       initI18n();
+      initMenu();
     </script>
     <script type="module" src="/src/main.js"></script>
   </body>

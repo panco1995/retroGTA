@@ -34,6 +34,10 @@ export function createInput(canvas) {
       pressed.delete(code);
       return true;
     },
+    release() {
+      down.clear();
+      pressed.clear();
+    },
     lock() {
       const pending = canvas.requestPointerLock?.();
       if (pending && typeof pending.catch === 'function') pending.catch(() => {});

@@ -18,10 +18,12 @@ A GTA-like game prototype built with Three.js. Geometry is generated in code. Th
 - Building collision; people and cars follow the road height
 - Movement limited to the island, the bridge deck, and the landing
 - Minimap showing the safehouse, vehicles, and the player's heading
+- Main menu: Start, Settings, and About
+- Pause with Esc: switch language, restart, or exit to the main menu
 
 ## Languages
 
-The settings button at the top right switches the interface. The choice is saved in the browser.
+Settings on the main menu, and Language on the pause menu, switch the interface. The choice is saved in the browser.
 
 - English (`en`) — default
 - Chinese (`zh`)
@@ -44,7 +46,7 @@ npm run preview  # serves the build
 
 ## Controls
 
-Click the picture to start. In the follow camera, the mouse turns the view. Press Esc to release the pointer, then click again to lock it. The top-down and 2.5D cameras stay fixed, and WASD moves relative to the screen.
+Choose Start on the main menu. In the follow camera, the mouse turns the view. Press Esc to pause. Esc again resumes, then click the picture to lock the pointer. The top-down and 2.5D cameras stay fixed, and WASD moves relative to the screen.
 
 | Key | On foot | Driving |
 | --- | --- | --- |
@@ -54,6 +56,7 @@ Click the picture to start. In the follow camera, the mouse turns the view. Pres
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
 | E | Enter the dark sedan when close | Exit when moving slowly |
 | Space | — | Brake |
+| Esc | Pause. Language, restart, or exit | Pause. Language, restart, or exit |
 
 The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the driveable car. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
 
@@ -87,6 +90,7 @@ A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx`
 | File | Role |
 | --- | --- |
 | `src/main.js` | Entry point |
+| `src/menu.js` | Main menu: Start, Settings, About |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Reads the map and builds roads, buildings, the elevated track, and colliders |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |

@@ -3,37 +3,49 @@ const packs = {
     place: 'East Island',
     sub: 'Safehouse',
     onFoot: 'On foot',
-    clickToStart: 'Click to start',
-    hintFollow: 'WASD move · Shift run · Mouse look · V camera · E enter',
-    hintFixed: 'WASD move · Shift run · V {view} · E enter',
-    hintDrive: 'WASD drive · Space brake · E exit · V {view}',
+    hintFollow: 'WASD move · Shift run · Mouse look · V camera · E enter · Esc pause',
+    hintFixed: 'WASD move · Shift run · V {view} · E enter · Esc pause',
+    hintDrive: 'WASD drive · Space brake · E exit · V {view} · Esc pause',
     enterCar: 'E  Enter',
     viewFollow: 'Follow',
     viewTop: 'Top-down',
     viewIso: '2.5D',
     bootKicker: 'East Island',
-    bootCopy: 'A GTA-like game. Click to enter the east island. The coast, diagonal road, and bridge are in; buildings are still simple.',
-    bootKeys: 'WASD move · Shift run · Mouse look · V top-down / 2.5D · E enter or exit · Space brake',
-    settings: 'Settings',
+    bootKeys: 'WASD move · Shift run · Mouse look · V top-down / 2.5D · E enter or exit · Space brake · Esc pause',
+    menuStart: 'Start',
+    menuSettings: 'Settings',
+    menuAbout: 'About',
+    menuBack: 'Back',
     language: 'Language',
+    pauseTitle: 'Paused',
+    pauseLang: 'Switch language',
+    pauseRestart: 'Restart',
+    pauseExit: 'Exit',
+    aboutCopy: 'A GTA-like game on the east island. The coast, diagonal road, and bridge are in; buildings are still simple.',
   },
   zh: {
     place: '东岛',
     sub: '安全屋',
     onFoot: '徒步',
-    clickToStart: '点击画面开始',
-    hintFollow: 'WASD 移动 · Shift 奔跑 · 鼠标 视角 · V 切换 · E 上车',
-    hintFixed: 'WASD 移动 · Shift 奔跑 · V {view} · E 上车',
-    hintDrive: 'WASD 驾驶 · 空格 刹车 · E 下车 · V {view}',
+    hintFollow: 'WASD 移动 · Shift 奔跑 · 鼠标 视角 · V 切换 · E 上车 · Esc 暂停',
+    hintFixed: 'WASD 移动 · Shift 奔跑 · V {view} · E 上车 · Esc 暂停',
+    hintDrive: 'WASD 驾驶 · 空格 刹车 · E 下车 · V {view} · Esc 暂停',
     enterCar: 'E  上车',
     viewFollow: '跟随',
     viewTop: '俯视',
     viewIso: '2.5D',
     bootKicker: '东岛',
-    bootCopy: '类 GTA 游戏。点击进入东岛，海岸、斜路和大桥已经铺上，房子仍是简模。',
-    bootKeys: 'WASD 移动 · Shift 奔跑 · 鼠标 转视角 · V 俯视 / 2.5D · E 上下车 · 空格 刹车',
-    settings: '设置',
+    bootKeys: 'WASD 移动 · Shift 奔跑 · 鼠标 转视角 · V 俯视 / 2.5D · E 上下车 · 空格 刹车 · Esc 暂停',
+    menuStart: '开始',
+    menuSettings: '设置',
+    menuAbout: '关于',
+    menuBack: '返回',
     language: '语言',
+    pauseTitle: '暂停',
+    pauseLang: '切换语言',
+    pauseRestart: '重新开始',
+    pauseExit: '退出',
+    aboutCopy: '类 GTA 游戏，场景在东岛。海岸、斜路和大桥已经铺上，房子仍是简模。',
   },
 };
 
@@ -87,34 +99,19 @@ export function setLang(next) {
   listeners.forEach((listener) => listener(current));
 }
 
+export function toggleLang() {
+  setLang(current === 'zh' ? 'en' : 'zh');
+}
+
 export function initI18n() {
   const saved = localStorage.getItem(storageKey);
   current = packs[saved] ? saved : 'en';
   applyStatic();
 
-  const toggle = document.getElementById('settings-toggle');
-  const panel = document.getElementById('settings-panel');
-  const close = () => {
-    panel.hidden = true;
-    toggle.setAttribute('aria-expanded', 'false');
-  };
-
-  toggle.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const open = panel.hidden;
-    panel.hidden = !open;
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-  panel.addEventListener('click', (event) => event.stopPropagation());
-  document.addEventListener('click', close);
-
   document.querySelectorAll('[data-lang]').forEach((el) => {
     el.addEventListener('click', (event) => {
-      event.stopPropagation();
       event.preventDefault();
       setLang(el.dataset.lang);
-      close();
     });
   });
 }

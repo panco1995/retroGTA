@@ -50,12 +50,72 @@ canvas#c {
 
 #speed {
   position: absolute;
-  top: 22px;
+  top: 64px;
   right: 22px;
   color: var(--ink);
   font-size: 22px;
   letter-spacing: 0.08em;
   text-shadow: 0 2px 0 #000;
+}
+
+#settings {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+#settings-toggle {
+  border: 1px solid rgba(240, 212, 138, 0.45);
+  background: rgba(10, 12, 10, 0.72);
+  color: var(--amber);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+
+#settings-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(10, 12, 10, 0.88);
+  border: 1px solid rgba(240, 212, 138, 0.45);
+  min-width: 148px;
+}
+
+#settings-panel[hidden] {
+  display: none;
+}
+
+.settings-label {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  margin-bottom: 8px;
+}
+
+#lang {
+  display: flex;
+  gap: 6px;
+}
+
+#lang button {
+  border: 1px solid rgba(240, 212, 138, 0.45);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+#lang button[aria-pressed="true"] {
+  color: var(--amber);
+  border-color: rgba(240, 212, 138, 0.9);
 }
 
 #map {

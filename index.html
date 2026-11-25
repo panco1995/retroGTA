@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,24 +12,39 @@
 
     <div id="hud">
       <div id="place-wrap">
-        <div id="place">东岛</div>
-        <div id="sub">安全屋</div>
+        <div id="place" data-i18n="place"></div>
+        <div id="sub" data-i18n="sub"></div>
       </div>
-      <div id="speed">徒步</div>
+      <div id="speed"></div>
       <canvas id="map" width="168" height="168"></canvas>
-      <div id="hint">WASD 移动 · Shift 奔跑 · 鼠标 视角 · E 上下车</div>
+      <div id="hint"></div>
       <div id="prompt"></div>
     </div>
 
     <button id="boot" type="button">
       <div class="boot-card">
-        <div class="boot-kicker">东岛</div>
+        <div class="boot-kicker" data-i18n="bootKicker"></div>
         <div class="boot-title">retroGTA</div>
-        <div class="boot-copy">类 GTA 游戏。点击进入东岛，海岸、斜路和大桥已经铺上，房子仍是简模。</div>
-        <div class="boot-keys">WASD 移动 · Shift 奔跑 · 鼠标 转视角 · V 俯视 / 2.5D · E 上下车 · 空格 刹车</div>
+        <div class="boot-copy" data-i18n="bootCopy"></div>
+        <div class="boot-keys" data-i18n="bootKeys"></div>
       </div>
     </button>
 
+    <div id="settings">
+      <button id="settings-toggle" type="button" data-i18n-aria="settings" aria-expanded="false" aria-controls="settings-panel">⚙</button>
+      <div id="settings-panel" hidden>
+        <div class="settings-label" data-i18n="language"></div>
+        <div id="lang" role="group">
+          <button type="button" data-lang="en">EN</button>
+          <button type="button" data-lang="zh">中文</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import { initI18n } from '/src/i18n.js';
+      initI18n();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

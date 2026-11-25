@@ -1,82 +1,92 @@
 # retroGTA
 
-用 Three.js 做的类 GTA 游戏原型。几何在代码里生成，当前可玩范围是东岛。
+[中文](README.zh.md)
 
-## 已实现
+A GTA-like game prototype built with Three.js. Geometry is generated in code. The playable area is the east island.
 
-- 徒步、奔跑，以及上车驾驶、刹车、下车
-- 跟随、俯视、2.5D 三种视角
-- 安全屋：浅色三层楼、台阶、门灯、地上光环，在西侧靠河大道的坡底
-- 安全屋外的上坡，坡顶是一个小路口
-- 联排住宅和仓库：砖墙、窗户、雨棚、招牌、消防梯、屋顶水箱
-- 海岸、沙滩、东岸斜路、西侧跨海大桥和桥头空地
-- 西侧海面上的高架，南缘的牌楼
-- 三名沿人行道走动的路人
-- 一辆可驾驶轿车，以及路边的出租车、厢式车和其他轿车
-- 建筑碰撞、人和车跟着路面起伏
-- 只能在岛上、桥面和桥头活动
-- 小地图：安全屋、车辆和玩家朝向
+## Implemented
 
-## 运行
+- Walk, run, enter a car, drive, brake, and exit
+- Three cameras: follow, top-down, and 2.5D
+- Safehouse: a light three-story building with a stoop, door light, and ground ring, at the foot of the riverside avenue
+- The slope outside the safehouse, ending at a small raised intersection
+- Row houses and warehouses: brick walls, windows, awnings, signs, fire escapes, and roof tanks
+- Coast, beach, a diagonal road on the east shore, a bridge to the west, and a landing
+- An elevated track over the water on the west side, and a gate on the south edge
+- Three pedestrians walking the sidewalks
+- One driveable sedan, plus parked taxis, vans, and other cars
+- Building collision; people and cars follow the road height
+- Movement limited to the island, the bridge deck, and the landing
+- Minimap showing the safehouse, vehicles, and the player's heading
 
-需要 Node.js 18+。
+## Languages
+
+The settings button at the top right switches the interface. The choice is saved in the browser.
+
+- English (`en`) — default
+- Chinese (`zh`)
+
+## Run
+
+Node.js 18 or newer.
 
 ```bash
 npm install
 npm run dev
 ```
 
-浏览器打开终端里的本地地址（默认 `http://127.0.0.1:5173/`）。
+Open the local address printed in the terminal (default `http://127.0.0.1:5173/`).
 
 ```bash
-npm run build    # 输出到 dist/
-npm run preview  # 预览构建结果
+npm run build    # writes dist/
+npm run preview  # serves the build
 ```
 
-## 操作
+## Controls
 
-点击画面进入。跟随视角下用鼠标转镜头，按 Esc 释放鼠标，再点击画面可重新锁定。俯视和 2.5D 镜头固定，WASD 按画面方向走。
+Click the picture to start. In the follow camera, the mouse turns the view. Press Esc to release the pointer, then click again to lock it. The top-down and 2.5D cameras stay fixed, and WASD moves relative to the screen.
 
-| 按键 | 徒步 | 驾驶 |
+| Key | On foot | Driving |
 | --- | --- | --- |
-| W A S D | 相对镜头移动 | 油门、刹车 / 倒车、转向 |
-| Shift | 奔跑 | — |
-| 鼠标 | 跟随视角下转动镜头 | 跟随视角下转动镜头 |
-| V | 跟随、俯视、2.5D 之间切换 | 跟随、俯视、2.5D 之间切换 |
-| E | 靠近深色轿车时上车 | 车速较低时下车 |
-| 空格 | — | 刹车 |
+| W A S D | Move relative to the camera | Throttle, brake / reverse, steer |
+| Shift | Run | — |
+| Mouse | Turn the follow camera | Turn the follow camera |
+| V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
+| E | Enter the dark sedan when close | Exit when moving slowly |
+| Space | — | Brake |
 
-左下角小地图：浅色方块是安全屋，黄点是可驾驶的车。右上角在开车时显示速度（km/h，倒车为负数）。
+The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the driveable car. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
 
-## 地图数据
+## Map data
 
-坐标：Y 朝上，+X 朝东，+Z 朝南。整座东岛写在 [`data/saint-marks.json`](data/saint-marks.json)。`src/city.js` 读取这份数据再生成模型。人和车跟着路面起伏，也只能站在岛、桥面或桥头上。安全屋在西侧靠河大道的坡底，门朝西对着这条上坡路。
+Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.json`](data/saint-marks.json). `src/city.js` reads that file and builds the meshes. People and cars follow the surface height, and they can stand only on the island, the bridge deck, or the landing. The safehouse sits at the foot of the riverside avenue on the west side, with its door facing west toward the slope.
 
-| 字段 | 作用 |
+| Field | Role |
 | --- | --- |
-| `roads` | 路口中心线。`blocks` 用 `col` / `row` 指向相邻两条路之间的街坊 |
-| `rows` | 手摆的一排房子，例如 `safe-row`。墙和窗仍由 `src/city.js` 生成 |
-| `hill` | 安全屋外的上坡和小路口 |
-| `island` | 海岸多边形 |
-| `beach` | 沙滩 |
-| `diagonals` | 斜路 |
-| `bridge`、`landing` | 大桥和桥头 |
+| `roads` | Intersection centerlines. `blocks` use `col` / `row` for the block between two roads |
+| `rows` | A hand-placed row of houses, such as `safe-row`. Walls and windows are still built in `src/city.js` |
+| `hill` | The slope and small intersection outside the safehouse |
+| `island` | Coast polygon |
+| `beach` | Sand |
+| `diagonals` | Diagonal roads |
+| `bridge`, `landing` | Bridge and far landing |
 
-位置可以用绝对的 `x` / `z`，或相对安全屋的 `dx` / `dz`，或 `lane`（`curbNorth`、`pedSouth`、`sidewalkWest` 等）。车和路人的 `heading` 用角度。
+A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx` / `dz`), or a `lane` (`curbNorth`, `pedSouth`, `sidewalkWest`, and so on). Vehicle and pedestrian `heading` values are degrees.
 
-## 目录
+## Layout
 
-| 文件 | 作用 |
+| File | Role |
 | --- | --- |
-| `src/main.js` | 启动入口 |
-| `src/game.js` | 循环、镜头、徒步 / 驾驶、界面 |
-| `src/city.js` | 读取地图数据，生成路、房子、高架和碰撞 |
-| `src/config.js` | 从地图文件导出尺寸，以及确定的随机数 |
-| `src/actor.js` | 低模人物和走路 / 坐姿 |
-| `src/vehicle.js` | 轿车、出租车、厢式车 |
-| `src/collision.js` | 水平面上的圆形碰撞，以及岛和桥的可走范围 |
-| `src/materials.js` | 砖纹和招牌（Canvas 贴图） |
-| `src/input.js` | 键盘和鼠标锁定 |
-| `src/minimap.js` | 左下角小地图 |
-| `src/style.css` | 界面样式 |
-| `data/saint-marks.json` | 地图数据：路网、街坊、地标、车辆和路人 |
+| `src/main.js` | Entry point |
+| `src/game.js` | Loop, cameras, walking and driving, HUD |
+| `src/city.js` | Reads the map and builds roads, buildings, the elevated track, and colliders |
+| `src/config.js` | Metrics exported from the map file, plus a stable hash |
+| `src/actor.js` | Low-poly people, walk cycle, and the seated pose |
+| `src/vehicle.js` | Sedan, taxi, and van |
+| `src/collision.js` | Circle collision on the ground, plus the walkable island and bridge |
+| `src/materials.js` | Brick and sign textures drawn on a canvas |
+| `src/i18n.js` | English and Chinese interface strings |
+| `src/input.js` | Keyboard and pointer lock |
+| `src/minimap.js` | Minimap |
+| `src/style.css` | HUD styles |
+| `data/saint-marks.json` | Map: roads, blocks, landmarks, vehicles, and pedestrians |

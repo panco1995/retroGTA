@@ -6,6 +6,7 @@ import { blocked, moveCircle } from './collision.js';
 import { animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
+import { onLangChange, t } from './i18n.js';
 
 const ENTER_DIST = 4.8;
 
@@ -270,9 +271,9 @@ function collidersFor(includeHero) {
   }
 
   function viewLabel() {
-    if (view === 'top') return '俯视';
-    if (view === 'iso') return '2.5D';
-    return '跟随';
+    if (view === 'top') return t('viewTop');
+    if (view === 'iso') return t('viewIso');
+    return t('viewFollow');
   }
 
   function updateCamera(dt, snap) {
@@ -338,24 +339,26 @@ function collidersFor(includeHero) {
   function updateHud() {
     if (!started) {
       setText(speedEl, '');
-      setText(hintEl, '点击画面开始');
+      setText(hintEl, t('clickToStart'));
       promptEl.style.opacity = '0';
       return;
     }
     if (mode === 'drive') {
       setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
-      setText(hintEl, `WASD 驾驶 · 空格 刹车 · E 下车 · V ${viewLabel()}`);
+      setText(hintEl, t('hintDrive', { view: viewLabel() }));
       promptEl.style.opacity = '0';
     } else {
-      setText(speedEl, '徒步');
+      setText(speedEl, t('onFoot'));
       setText(hintEl, view === 'follow'
-        ? 'WASD 移动 · Shift 奔跑 · 鼠标 视角 · V 切换 · E 上车'
-        : `WASD 移动 · Shift 奔跑 · V ${viewLabel()} · E 上车`);
+        ? t('hintFollow')
+        : t('hintFixed', { view: viewLabel() }));
       const near = (player.x - hero.x) ** 2 + (player.z - hero.z) ** 2 < ENTER_DIST * ENTER_DIST;
-      promptEl.textContent = near ? 'E  上车' : '';
+      promptEl.textContent = near ? t('enterCar') : '';
       promptEl.style.opacity = near ? '1' : '0';
     }
   }
+
+  onLangChange(updateHud);
 
   document.addEventListener('mousemove', (e) => {
     if (!started || view !== 'follow' || document.pointerLockElement !== canvas) return;

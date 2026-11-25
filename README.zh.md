@@ -61,17 +61,26 @@ npm run preview  # 预览构建结果
 
 坐标：Y 朝上，+X 朝东，+Z 朝南。整座东岛写在 [`data/saint-marks.json`](data/saint-marks.json)。`src/city.js` 读取这份数据再生成模型。人和车跟着路面起伏，也只能站在岛、桥面或桥头上。安全屋在西侧靠河大道的坡底，门朝西对着这条上坡路。
 
-| 字段 | 作用 |
+| 元素 | 支持情况 |
 | --- | --- |
-| `roads` | 路口中心线。`blocks` 用 `col` / `row` 指向相邻两条路之间的街坊 |
-| `rows` | 手摆的一排房子，例如 `safe-row`。墙和窗仍由 `src/city.js` 生成 |
-| `hill` | 安全屋外的上坡和小路口 |
-| `island` | 海岸多边形 |
-| `beach` | 沙滩 |
-| `diagonals` | 斜路 |
-| `bridge`、`landing` | 大桥和桥头 |
+| `roads` | 已支持。正交路网。人行道、斑马线和路灯沿路自动生成 |
+| `blocks` | 已支持。`residential` 在街坊南北两边放联排住宅，`industrial` 放两座朝南的仓库。`alley` 会在中间巷子放两只垃圾箱 |
+| `rows` | 已支持。手摆的一排房子：宽度、层数、墙色、底商、雨棚、消防梯、屋顶水箱 |
+| `safehouse` | 已支持。一座安全屋，当前地图已填写 |
+| `hill` | 已支持。安全屋外的上坡和坡顶小路口 |
+| `island`、`beach`、`landing` | 已支持。海岸、沙滩、桥对岸空地 |
+| `diagonals` | 已支持。斜路 |
+| `bridge` | 已支持。一座大桥，桥面与路面同高，两侧有桥塔 |
+| `water` | 已支持。一块水面 |
+| `elevated`、`train` | 已支持。高架，以及在上面来回开的列车 |
+| `gate` | 已支持。一座牌楼和一小段引道 |
+| `trees` | 已支持。可摆放的树 |
+| `safehouseProps` | 已支持 `marker`（存档光环）、`hydrant`（消防栓）、`trash`（垃圾桶） |
+| `vehicles` | 已支持 `sedan`（轿车）、`taxi`（出租车）、`van`（厢式车）。`driveable` 标出玩家可以开的那辆 |
+| `pedestrians` | 已支持。沿路径走动的路人，可配上衣、裤子和帽子 |
+| `bounds` | 读取代码接受额外碰撞墙。当前地图没有填写这一项 |
 
-位置可以用绝对的 `x` / `z`，或相对安全屋的 `dx` / `dz`，或 `lane`（`curbNorth`、`pedSouth`、`sidewalkWest` 等）。车和路人的 `heading` 用角度。
+位置可以用绝对的 `x` / `z`，或相对安全屋门的 `dx` / `dz`，或 `lane`（`curbNorth`、`pedSouth`、`sidewalkWest` 等）。车和路人的 `heading` 用角度。
 
 ## 目录
 

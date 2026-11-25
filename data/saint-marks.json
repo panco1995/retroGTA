@@ -1,0 +1,162 @@
+{
+  "id": "east-island",
+  "name": "东岛",
+  "note": "东岛。坐标 Y 朝上，+X 朝东，+Z 朝南。角度用度数。安全屋在西侧靠河大道的坡底，门朝向这条上坡路，坡顶是北面的路口。`island` 是海岸，`diagonals` 是斜路，`bridge` 跨向西边的桥头。",
+  "metrics": {
+    "roadW": 14,
+    "walk": 3.2,
+    "houseDepth": 10,
+    "floorH": 3.15,
+    "walkTop": 0.11,
+    "roadTop": 0.05
+  },
+  "lanes": {
+    "curbInset": 1.9,
+    "pedInset": 0.85
+  },
+  "roads": {
+    "x": [-110, -34, 24, 70, 145],
+    "z": [-155, -86, -48, 0, 52, 145]
+  },
+  "bricks": ["#7c4a3e", "#6e5148", "#8d5c45", "#5e4a42", "#7a5a48", "#6a3e3a", "#8a6a52"],
+  "signs": [
+    ["GROCER", "#6e2430"],
+    ["CAFE", "#1f4a3a"],
+    ["BARBER", "#1d3d5c"],
+    ["LAUNDRY", "#5a4630"]
+  ],
+  "rows": {
+    "safe-row": [
+      { "w": 10.5, "floors": 3, "color": "#c4b49a", "fireEscape": true, "shop": false },
+      { "w": 8.2, "floors": 4, "shop": true, "awning": "#6e2430", "color": "#7a463c", "fireEscape": true },
+      { "w": 8.6, "floors": 5, "color": "#6b5348", "waterTower": true, "fireEscape": true },
+      { "w": 8.2, "floors": 4, "color": "#8a5a3e", "shop": true, "awning": "#1f4a3a", "fireEscape": true }
+    ]
+  },
+  "blocks": [
+    { "col": 1, "row": 0, "kind": "residential", "alley": true, "seed": 311 },
+    { "col": 2, "row": 0, "kind": "residential", "alley": true, "seed": 312 },
+    { "col": 0, "row": 1, "kind": "industrial", "seed": 301 },
+    { "col": 1, "row": 1, "kind": "industrial", "seed": 100 },
+    { "col": 2, "row": 1, "kind": "industrial", "seed": 117 },
+    { "col": 3, "row": 1, "kind": "residential", "alley": true, "seed": 321 },
+    { "col": 0, "row": 2, "kind": "industrial", "seed": 302, "insetWest": 18 },
+    { "col": 1, "row": 2, "kind": "residential", "south": "safe-row", "alley": true, "seed": 153 },
+    { "col": 2, "row": 2, "kind": "residential", "alley": true, "seed": 170 },
+    { "col": 3, "row": 2, "kind": "residential", "alley": true, "seed": 322 },
+    { "col": 0, "row": 3, "kind": "industrial", "seed": 303 },
+    { "col": 1, "row": 3, "kind": "residential", "alley": true, "seed": 206 },
+    { "col": 2, "row": 3, "kind": "residential", "alley": true, "seed": 223 },
+    { "col": 3, "row": 3, "kind": "residential", "alley": true, "seed": 323 },
+    { "col": 1, "row": 4, "kind": "residential", "alley": true, "seed": 331 },
+    { "col": 2, "row": 4, "kind": "residential", "alley": true, "seed": 332 }
+  ],
+  "island": [
+    [-55, -172], [55, -178], [125, -150], [158, -60], [162, 40],
+    [140, 120], [70, 168], [-10, 172], [-85, 145], [-128, 70], [-132, -30], [-100, -130]
+  ],
+  "beach": [
+    [132, -110], [150, -40], [154, 30], [136, 90], [118, 20], [120, -70]
+  ],
+  "diagonals": [
+    {
+      "id": "beach-drive",
+      "width": 10,
+      "points": [[148, -70], [156, 0], [150, 70], [136, 120]]
+    }
+  ],
+  "bridge": {
+    "id": "callahan",
+    "width": 14,
+    "points": [[-112, 92], [-200, 124], [-290, 148]]
+  },
+  "landing": [[-275, 130], [-350, 136], [-356, 178], [-270, 170]],
+  "water": { "x": -80, "z": 0, "w": 640, "d": 520, "y": -0.7 },
+  "elevated": { "x": -140, "z0": -40, "z1": 90, "deckY": 6.55, "pillarSpacing": 18 },
+  "train": { "startZ": 10, "speed": 7, "minZ": -36, "maxZ": 82 },
+  "gate": { "x": 20, "z": 160, "approach": { "w": 8, "d": 14 } },
+  "hill": {
+    "roadX": -110,
+    "zTop": -48,
+    "zLow": -7,
+    "zHigh": -41,
+    "rise": 5.2,
+    "taper": 26,
+    "west": 14,
+    "pad": { "minX": -100.4, "maxX": -87, "minZ": -22.2, "maxZ": -9.6, "doorZ": -16 }
+  },
+  "safehouse": {
+    "x": -93.5,
+    "z": -16,
+    "w": 11,
+    "d": 10,
+    "floors": 3,
+    "color": "#c4b49a",
+    "face": "east"
+  },
+  "safehouseProps": [
+    { "type": "marker", "dx": 2.35, "dz": 1.7 },
+    { "type": "hydrant", "dx": -2.1, "dz": 2.1 },
+    { "type": "trash", "dx": 3.6, "dz": 0.8 }
+  ],
+  "trees": [
+    { "x": -7.6, "lane": "sidewalkNorth", "scale": 1 },
+    { "x": 1.5, "lane": "sidewalkNorth", "scale": 0.9 },
+    { "x": 8, "lane": "sidewalkSouth", "scale": 1.05 },
+    { "x": -6, "lane": "sidewalkSouth", "scale": 0.85 },
+    { "x": 16, "lane": "sidewalkSouth", "scale": 1 },
+    { "laneX": "sidewalkWest", "roadIndex": 1, "z": -18, "scale": 1.1 },
+    { "laneX": "sidewalkWest", "roadIndex": 1, "z": 8, "scale": 0.95 },
+    { "laneX": "sidewalkWest", "roadIndex": 1, "z": 28, "scale": 1 }
+  ],
+  "vehicles": [
+    { "x": -104.8, "z": -24, "heading": 180, "type": "sedan", "color": "#1b2420", "driveable": true },
+    { "x": 1.5, "lane": "curbNorth", "heading": 90, "type": "taxi", "color": "#d6ae2b" },
+    { "x": -17, "lane": "curbSouth", "heading": -90, "type": "sedan", "color": "#6a2424" },
+    { "x": -6.6, "lane": "curbSouth", "heading": 90, "type": "van", "color": "#2c3136" },
+    { "x": 8, "lane": "curbSouth", "heading": -90, "type": "sedan", "color": "#1a1c28" },
+    { "along": { "road": "x", "index": 1, "side": "east" }, "z": -20, "heading": 180, "type": "sedan", "color": "#3f3328" },
+    { "x": 146, "z": 20, "heading": 25, "type": "taxi", "color": "#d6ae2b" },
+    { "x": -96, "z": 78, "heading": 210, "type": "van", "color": "#3a4038" }
+  ],
+  "pedestrians": [
+    {
+      "x": -14.5,
+      "lane": "pedNorth",
+      "heading": 90,
+      "speed": 1.15,
+      "shirt": "#8d3d32",
+      "pants": "#2c3038",
+      "path": [
+        { "x": -22, "lane": "pedNorth" },
+        { "x": 16, "lane": "pedNorth" }
+      ]
+    },
+    {
+      "x": -4,
+      "lane": "pedSouth",
+      "heading": -90,
+      "speed": 1.05,
+      "shirt": "#2f4a38",
+      "pants": "#3a332c",
+      "cap": "#1c1e18",
+      "path": [
+        { "x": -18, "lane": "pedSouth" },
+        { "x": 18, "lane": "pedSouth" }
+      ]
+    },
+    {
+      "laneX": "sidewalkWest",
+      "roadIndex": 1,
+      "z": -6,
+      "heading": 180,
+      "speed": 1.25,
+      "shirt": "#3a3f4a",
+      "pants": "#22262e",
+      "path": [
+        { "laneX": "sidewalkWest", "roadIndex": 1, "z": -36 },
+        { "laneX": "sidewalkWest", "roadIndex": 1, "z": 24 }
+      ]
+    }
+  ]
+}

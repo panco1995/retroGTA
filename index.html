@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>retroGTA</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23c4b49a'/></svg>" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+
+    <div id="hud">
+      <div id="place-wrap">
+        <div id="place">东岛</div>
+        <div id="sub">安全屋</div>
+      </div>
+      <div id="speed">徒步</div>
+      <canvas id="map" width="168" height="168"></canvas>
+      <div id="hint">WASD 移动 · Shift 奔跑 · 鼠标 视角 · E 上下车</div>
+      <div id="prompt"></div>
+    </div>
+
+    <button id="boot" type="button">
+      <div class="boot-card">
+        <div class="boot-kicker">东岛</div>
+        <div class="boot-title">retroGTA</div>
+        <div class="boot-copy">类 GTA 游戏。点击进入东岛，海岸、斜路和大桥已经铺上，房子仍是简模。</div>
+        <div class="boot-keys">WASD 移动 · Shift 奔跑 · 鼠标 转视角 · V 俯视 / 2.5D · E 上下车 · 空格 刹车</div>
+      </div>
+    </button>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

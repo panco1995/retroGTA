@@ -1,0 +1,143 @@
+:root {
+  color-scheme: dark;
+  --ink: #f3efe4;
+  --amber: #f0d48a;
+  --muted: #c9c2b2;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #8b97a1;
+  font-family: "Avenir Next Condensed", "Arial Narrow", "PingFang SC", sans-serif;
+}
+
+canvas#c {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#place-wrap {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  text-shadow: 0 2px 0 #000, 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+#place {
+  font-size: 28px;
+  letter-spacing: 0.16em;
+  color: var(--amber);
+  font-weight: 700;
+}
+
+#sub {
+  margin-top: 2px;
+  font-size: 13px;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+}
+
+#speed {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  color: var(--ink);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 0 #000;
+}
+
+#map {
+  position: absolute;
+  left: 18px;
+  bottom: 58px;
+  width: 168px;
+  height: 168px;
+  border-radius: 10px;
+  background: rgba(12, 14, 12, 0.72);
+  border: 1px solid rgba(240, 212, 138, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+#hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  text-align: center;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  font-size: 14px;
+  text-shadow: 0 2px 0 #000;
+}
+
+#prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border: 1px solid rgba(240, 212, 138, 0.7);
+  background: rgba(10, 12, 10, 0.72);
+  color: var(--amber);
+  letter-spacing: 0.18em;
+  font-size: 16px;
+  opacity: 0;
+}
+
+#boot {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.05) 46%, rgba(0, 0, 0, 0.18));
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+#boot.hidden { display: none; }
+
+.boot-card {
+  margin-bottom: 54px;
+  text-align: center;
+  color: var(--ink);
+  text-shadow: 0 2px 0 #000;
+}
+
+.boot-kicker {
+  letter-spacing: 0.42em;
+  font-size: 12px;
+  color: var(--amber);
+}
+
+.boot-title {
+  font-size: 40px;
+  letter-spacing: 0.18em;
+  margin-top: 4px;
+}
+
+.boot-copy {
+  margin-top: 8px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.boot-keys {
+  margin-top: 12px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: #efe6d2;
+}

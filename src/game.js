@@ -9,8 +9,27 @@ import { createMinimap } from './minimap.js';
 import { onLangChange, t, toggleLang } from './i18n.js';
 import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
+import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 
 const ENTER_DIST = 4.8;
+
+const CHEAT_COLORS = {
+  sedan: '#3f4a52',
+  taxi: '#d6ae2b',
+  hatchback: '#c8c2b4',
+  suv: '#23342c',
+  pickup: '#8a4a2c',
+  sports: '#a32121',
+  van: '#2c3136',
+  bus: '#2f6b4f',
+  truck: '#c9c4b8',
+  excavator: '#d9a520',
+  tractor: '#2f6b3a',
+  ambulance: '#f2f0e8',
+  firetruck: '#c02626',
+  police: '#f2f0e8',
+  mixer: '#d9a520',
+};
 
 export function createGame(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -83,7 +102,7 @@ export function createGame(canvas) {
     return actor;
   });
 
-  const hero = world.vehicles.find((v) => v.driveable);
+  let hero = world.vehicles.find((v) => v.driveable);
   const vehicleHome = world.vehicles.map((vehicle) => ({
     vehicle,
     x: vehicle.x,
@@ -91,6 +110,7 @@ export function createGame(canvas) {
     heading: vehicle.heading,
     y: vehicle.y,
     pitch: vehicle.pitch,
+    driveable: vehicle.driveable,
   }));
   const pedHome = peds.map((ped) => ({ x: ped.x, z: ped.z, heading: ped.heading }));
   const input = createInput(canvas);
@@ -114,6 +134,10 @@ export function createGame(canvas) {
   const menuEl = document.getElementById('menu');
   const hudEl = document.getElementById('hud');
   const pauseEl = document.getElementById('pause');
+  const pauseHomeEl = document.getElementById('pause-home');
+  const cheatsPanel = document.getElementById('pause-cheats-panel');
+  const cheatSelect = document.getElementById('cheat-vehicle-type');
+  const cheatStatus = document.getElementById('cheat-status');
 
   function placeOnFoot(actor, x, z, heading) {
     actor.x = x;
@@ -123,6 +147,129 @@ export function createGame(canvas) {
     actor.group.rotation.set(0, heading, 0);
   }
 
+  function vehicleLabel(type) {
+    return t(`vehicle_${type}`);
+  }
+
+  function nearestVehicle(x, z) {
+    let best = null;
+    let bestDist = ENTER_DIST * ENTER_DIST;
+    for (const vehicle of world.vehicles) {
+      if (!vehicle.driveable) continue;
+      const dx = x - vehicle.x;
+      const dz = z - vehicle.z;
+      const dist = dx * dx + dz * dz;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = vehicle;
+      }
+    }
+    return best;
+  }
+
+  function activateHero(next) {
+    if (!next || next === hero) return;
+    const previous = hero;
+    previous.driveable = false;
+    previous.speed = 0;
+    previous.braking = false;
+    const previousBox = previous.collider();
+    if (!world.colliders.includes(previousBox)) world.colliders.push(previousBox);
+    const nextBox = next.collider();
+    const index = world.colliders.indexOf(nextBox);
+    if (index >= 0) world.colliders.splice(index, 1);
+    next.driveable = true;
+    hero = next;
+  }
+
+  function findSpawnSpot(origin, facing, radius) {
+    const cols = [...world.colliders, hero.collider()];
+    const angles = [
+      0, Math.PI / 2, -Math.PI / 2, Math.PI,
+      Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75,
+    ];
+    const distances = [radius + 2.5, radius + 5, radius + 8, radius + 12];
+    for (const distance of distances) {
+      for (const angle of angles) {
+        const heading = facing + angle;
+        const x = origin.x + Math.sin(heading) * distance;
+        const z = origin.z + Math.cos(heading) * distance;
+        if (!blocked(x, z, radius, cols)) return { x, z };
+      }
+    }
+    return null;
+  }
+
+  function removeCheatVehicles() {
+    for (let i = world.vehicles.length - 1; i >= 0; i -= 1) {
+      const vehicle = world.vehicles[i];
+      if (!vehicle.cheat) continue;
+      const index = world.colliders.indexOf(vehicle._aabb);
+      if (index >= 0) world.colliders.splice(index, 1);
+      vehicle.group.removeFromParent();
+      vehicle.group.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+      });
+      world.vehicles.splice(i, 1);
+    }
+    for (let i = vehicleHome.length - 1; i >= 0; i -= 1) {
+      if (vehicleHome[i].vehicle.cheat) vehicleHome.splice(i, 1);
+    }
+  }
+
+  function syncVehicleColliders() {
+    for (const home of vehicleHome) {
+      const index = world.colliders.indexOf(home.vehicle._aabb);
+      if (index >= 0) world.colliders.splice(index, 1);
+      if (!home.vehicle.driveable) world.colliders.push(home.vehicle.collider());
+    }
+  }
+
+  function spawnCheatVehicle(type) {
+    const origin = mode === 'drive' ? hero : player;
+    const facing = mode === 'drive' ? hero.heading : player.heading;
+    const size = vehicleFootprint(type);
+    const radius = Math.max(size.length, size.width) / 2 + 0.4;
+    const spot = findSpawnSpot(origin, facing, radius);
+    if (!spot) {
+      cheatStatus.textContent = t('cheatNoRoom');
+      return;
+    }
+    const vehicle = world.spawnVehicle({
+      x: spot.x,
+      z: spot.z,
+      heading: facing,
+      type,
+      color: CHEAT_COLORS[type] ?? '#8a8f92',
+      driveable: true,
+    });
+    vehicle.cheat = true;
+    world.colliders.push(vehicle.collider());
+    vehicleHome.push({
+      vehicle,
+      x: vehicle.x,
+      z: vehicle.z,
+      heading: vehicle.heading,
+      y: vehicle.y,
+      pitch: vehicle.pitch,
+      driveable: true,
+    });
+    cheatStatus.textContent = t('cheatSpawned', { vehicle: vehicleLabel(type) });
+  }
+
+  function fillCheatVehicles() {
+    const selected = cheatSelect.value;
+    cheatSelect.replaceChildren();
+    for (const type of VEHICLE_TYPES) {
+      const option = document.createElement('option');
+      option.value = type;
+      option.textContent = vehicleLabel(type);
+      cheatSelect.append(option);
+    }
+    if (selected) cheatSelect.value = selected;
+    cheatStatus.textContent = '';
+  }
+
   function resetSession() {
     if (mode === 'drive') {
       scene.attach(player.group);
@@ -130,6 +277,9 @@ export function createGame(canvas) {
     }
     mode = 'foot';
     view = 'follow';
+    removeCheatVehicles();
+    for (const home of vehicleHome) home.vehicle.driveable = home.driveable;
+    hero = vehicleHome.find((home) => home.driveable)?.vehicle ?? hero;
     placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
     yaw = spawn.heading;
     pitch = 0.3;
@@ -144,7 +294,9 @@ export function createGame(canvas) {
       home.vehicle.steer = 0;
       home.vehicle.braking = false;
       home.vehicle.sync();
+      home.vehicle.collider();
     }
+    syncVehicleColliders();
     peds.forEach((ped, index) => {
       const home = pedHome[index];
       ped.index = 0;
@@ -267,9 +419,11 @@ function collidersFor(includeHero) {
     animateActor(player, speed, time, dt);
 
     if (input.consume('interact')) {
-      const dx = player.x - hero.x;
-      const dz = player.z - hero.z;
-      if (dx * dx + dz * dz < ENTER_DIST * ENTER_DIST) enterCar();
+      const target = nearestVehicle(player.x, player.z);
+      if (target) {
+        activateHero(target);
+        enterCar();
+      }
     }
   }
 
@@ -430,14 +584,26 @@ function collidersFor(includeHero) {
       setText(hintEl, view === 'follow'
         ? t('hintFollow', keys)
         : t('hintFixed', { ...keys, view: viewLabel() }));
-      const near = (player.x - hero.x) ** 2 + (player.z - hero.z) ** 2 < ENTER_DIST * ENTER_DIST;
+      const near = nearestVehicle(player.x, player.z);
       promptEl.textContent = near ? t('enterCar', keys) : '';
       promptEl.style.opacity = near ? '1' : '0';
     }
   }
 
   onLangChange(updateHud);
+  onLangChange(fillCheatVehicles);
   onBindingsChange(updateHud);
+  fillCheatVehicles();
+
+  document.getElementById('pause-cheats').addEventListener('click', () => {
+    pauseHomeEl.hidden = true;
+    cheatsPanel.hidden = false;
+    cheatStatus.textContent = '';
+  });
+  document.getElementById('pause-cheats-back').addEventListener('click', () => resetPauseControls());
+  document.getElementById('cheat-spawn').addEventListener('click', () => {
+    spawnCheatVehicle(cheatSelect.value);
+  });
 
   document.addEventListener('mousemove', (e) => {
     if (!started || view !== 'follow' || document.pointerLockElement !== canvas) return;
@@ -482,8 +648,12 @@ function collidersFor(includeHero) {
     if (event.code !== 'Escape' || event.repeat) return;
     if (!started || suppressEsc) return;
     event.preventDefault();
-    if (paused) closePause();
-    else openPause();
+    if (paused) {
+      if (!cheatsPanel.hidden) resetPauseControls();
+      else closePause();
+    } else {
+      openPause();
+    }
   });
 
   document.addEventListener('pointerlockchange', () => {

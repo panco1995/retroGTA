@@ -481,6 +481,24 @@ const BUILDERS = {
   mixer: buildMixer,
 };
 
+export const VEHICLE_TYPES = Object.keys(BUILDERS);
+
+const footprints = new Map();
+
+export function vehicleFootprint(type) {
+  const key = type in BUILDERS ? type : 'sedan';
+  const cached = footprints.get(key);
+  if (cached) return cached;
+  const group = new THREE.Group();
+  const built = BUILDERS[key](group, 0x888888, key === 'taxi');
+  group.traverse((obj) => {
+    if (obj.geometry) obj.geometry.dispose();
+  });
+  const size = { length: built.length, width: built.width };
+  footprints.set(key, size);
+  return size;
+}
+
 export function createVehicle(cfg) {
   const group = new THREE.Group();
   const type = cfg.type in BUILDERS ? cfg.type : 'sedan';

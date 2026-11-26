@@ -55,6 +55,7 @@
         <nav id="pause-home" class="menu-list">
           <button type="button" id="pause-lang" data-i18n="pauseLang"></button>
           <button type="button" id="pause-controls" data-i18n="pauseControls"></button>
+          <button type="button" id="pause-cheats" data-i18n="pauseCheats"></button>
           <button type="button" id="pause-restart" data-i18n="pauseRestart"></button>
           <button type="button" id="pause-exit" data-i18n="pauseExit"></button>
         </nav>
@@ -63,6 +64,16 @@
           <div id="pause-controls-list"></div>
           <button type="button" id="pause-controls-reset" class="controls-reset" data-i18n="controlsReset"></button>
           <button type="button" id="pause-controls-back" class="menu-back" data-i18n="menuBack"></button>
+        </section>
+        <section id="pause-cheats-panel" class="menu-panel" hidden>
+          <div class="settings-label" data-i18n="cheatSpawn"></div>
+          <label class="cheat-field">
+            <span data-i18n="cheatVehicle"></span>
+            <select id="cheat-vehicle-type"></select>
+          </label>
+          <button type="button" id="cheat-spawn" class="controls-reset" data-i18n="cheatSpawnButton"></button>
+          <p id="cheat-status" class="cheat-status"></p>
+          <button type="button" id="pause-cheats-back" class="menu-back" data-i18n="menuBack"></button>
         </section>
       </div>
     </div>

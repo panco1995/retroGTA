@@ -945,27 +945,42 @@ const platW = Math.min(w * 0.34, 2.4);
     addTree(placeX(tree, 0), placeZ(tree, 0), tree.scale ?? 1);
   }
 
-  const vehicles = MAP.vehicles.map((spot) => {
-    const vehicle = createVehicle({
+  const vehicles = [];
+
+  function placeVehicle(vehicle, x, z, heading) {
+    const ahead = 3;
+    vehicle.x = x;
+    vehicle.z = z;
+    vehicle.heading = heading;
+    vehicle.y = groundHeight(x, z);
+    const nose = groundHeight(
+      x + Math.sin(heading) * ahead,
+      z + Math.cos(heading) * ahead,
+    );
+    vehicle.pitch = -Math.atan2(nose - vehicle.y, ahead);
+    vehicle.sync();
+    return vehicle;
+  }
+
+  function addVehicle(cfg) {
+    const vehicle = createVehicle({ ...cfg, color: colorOf(cfg.color) });
+    placeVehicle(vehicle, cfg.x, cfg.z, cfg.heading ?? 0);
+    group.add(vehicle.group);
+    vehicles.push(vehicle);
+    return vehicle;
+  }
+
+  for (const spot of MAP.vehicles) {
+    const vehicle = addVehicle({
       x: placeX(spot, 0),
       z: placeZ(spot, 0),
       heading: deg(spot.heading),
       type: spot.type,
-      color: colorOf(spot.color),
+      color: spot.color,
       driveable: !!spot.driveable,
     });
-    const ahead = 3;
-    vehicle.y = groundHeight(vehicle.x, vehicle.z);
-    const nose = groundHeight(
-      vehicle.x + Math.sin(vehicle.heading) * ahead,
-      vehicle.z + Math.cos(vehicle.heading) * ahead,
-    );
-    vehicle.pitch = -Math.atan2(nose - vehicle.y, ahead);
-    vehicle.sync();
-    group.add(vehicle.group);
     if (!vehicle.driveable) colliders.push(vehicle.collider());
-    return vehicle;
-  });
+  }
 
   const pedestrians = MAP.pedestrians.map((spec) => ({
     x: placeX(spec, 0),
@@ -1006,6 +1021,9 @@ const platW = Math.min(w * 0.34, 2.4);
     landing: MAP.landing,
     deck,
     water: { x: MAP.water.x, z: MAP.water.z, w: MAP.water.w, d: MAP.water.d },
+    spawnVehicle(cfg) {
+      return addVehicle(cfg);
+    },
     update(dt) {
       for (const marker of markers) marker.rotation.y += dt * 1.3;
       trainZ += trainDir * MAP.train.speed * dt;

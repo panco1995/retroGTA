@@ -163,9 +163,13 @@ function pauseControlsOpen() {
 function showPauseHome() {
   cancelCapture();
   const home = document.getElementById('pause-home');
-  const panel = document.getElementById('pause-controls-panel');
+  const pause = document.getElementById('pause');
   if (home) home.hidden = false;
-  if (panel) panel.hidden = true;
+  if (pause) {
+    pause.querySelectorAll('.menu-panel').forEach((panel) => {
+      panel.hidden = true;
+    });
+  }
   document.body.classList.remove('rebinding');
 }
 

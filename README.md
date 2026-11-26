@@ -23,7 +23,8 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Minimap showing the safehouse, vehicles, and the player's heading
 - Main menu: Start, Settings, and About
 - Rebind keys in Settings, or from Controls while paused. The choice is saved in the browser
-- Pause with Esc: controls, switch language, restart, or exit to the main menu
+- Pause with Esc: controls, switch language, cheats, restart, or exit to the main menu
+- Cheat menu: spawn a chosen vehicle beside the player. Restart removes those vehicles
 
 ## Languages
 
@@ -62,7 +63,7 @@ Settings, and Controls on the pause menu, rebind the keys below. Click a binding
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
 | E | Enter the dark sedan when close | Exit when moving slowly |
 | Space | — | Brake |
-| Esc | Pause. Language, restart, or exit | Pause. Language, restart, or exit |
+| Esc | Pause. Language, cheats, restart, or exit | Pause. Language, cheats, restart, or exit |
 
 The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the driveable car. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
 

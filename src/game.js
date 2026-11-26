@@ -11,7 +11,7 @@ import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 
-const ENTER_DIST = 4.8;
+const ENTER_RANGE = 20;
 
 const CHEAT_COLORS = {
   sedan: '#3f4a52',
@@ -121,6 +121,10 @@ export function createGame(canvas) {
   let suppressEsc = false;
   let mode = 'foot';
   let view = 'follow';
+  let approach = null;
+  let pendingEnter = null;
+  let pendingExit = null;
+  let flash = null;
   let yaw = Math.PI;
   let pitch = 0.32;
   const scratch = [];
@@ -151,14 +155,21 @@ export function createGame(canvas) {
     return t(`vehicle_${type}`);
   }
 
-  function nearestVehicle(x, z) {
+  // Distance from a point to the body of a vehicle (0 when inside it).
+  function vehicleDistance(vehicle, x, z) {
+    const box = vehicle.collider();
+    const cx = x < box.minX ? box.minX : x > box.maxX ? box.maxX : x;
+    const cz = z < box.minZ ? box.minZ : z > box.maxZ ? box.maxZ : z;
+    return Math.hypot(x - cx, z - cz);
+  }
+
+  // Every vehicle can be driven, so the only filter is the pick up range.
+  function findEnterableVehicle(x, z) {
     let best = null;
-    let bestDist = ENTER_DIST * ENTER_DIST;
+    let bestDist = ENTER_RANGE;
     for (const vehicle of world.vehicles) {
-      if (!vehicle.driveable) continue;
-      const dx = x - vehicle.x;
-      const dz = z - vehicle.z;
-      const dist = dx * dx + dz * dz;
+      if (vehicle.inUse) continue;
+      const dist = vehicleDistance(vehicle, x, z);
       if (dist < bestDist) {
         bestDist = dist;
         best = vehicle;
@@ -167,18 +178,63 @@ export function createGame(canvas) {
     return best;
   }
 
-  function activateHero(next) {
-    if (!next || next === hero) return;
-    const previous = hero;
-    previous.driveable = false;
-    previous.speed = 0;
-    previous.braking = false;
-    const previousBox = previous.collider();
-    if (!world.colliders.includes(previousBox)) world.colliders.push(previousBox);
-    const nextBox = next.collider();
-    const index = world.colliders.indexOf(nextBox);
+  // A spot beside the vehicle, always outside its collider box.
+  // side -1 is the driver's side (local -X), 1 is the passenger side.
+  function sideSpot(vehicle, side) {
+    const h = vehicle.heading;
+    const lateral = vehicle.sideExtent() + player.radius + 0.35;
+    return {
+      x: vehicle.x + side * Math.cos(h) * lateral,
+      z: vehicle.z - side * Math.sin(h) * lateral,
+    };
+  }
+
+  // Where the character walks to before getting in: the driver's door when it
+  // is reachable, otherwise the other side, otherwise behind the vehicle.
+  function approachSpot(vehicle) {
+    const spec = vehicle.doorSpec();
+    const forward = spec ? spec.z : 0;
+    const spots = [-1, 1].map((side) => {
+      const spot = sideSpot(vehicle, side);
+      const h = vehicle.heading;
+      return {
+        x: spot.x + Math.sin(h) * forward,
+        z: spot.z + Math.cos(h) * forward,
+      };
+    });
+    spots.push({
+      x: vehicle.x - Math.sin(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
+      z: vehicle.z - Math.cos(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
+    });
+    for (const spot of spots) {
+      if (!blocked(spot.x, spot.z, player.radius, world.colliders)) return spot;
+    }
+    return spots[0];
+  }
+
+  function addVehicleCollider(vehicle) {
+    const box = vehicle.collider();
+    if (!world.colliders.includes(box)) world.colliders.push(box);
+  }
+
+  function removeVehicleCollider(vehicle) {
+    const box = vehicle.collider();
+    const index = world.colliders.indexOf(box);
     if (index >= 0) world.colliders.splice(index, 1);
-    next.driveable = true;
+  }
+
+  function activateHero(next) {
+    if (!next) return;
+    const previous = hero;
+    if (previous && previous !== next) {
+      previous.inUse = false;
+      previous.speed = 0;
+      previous.braking = false;
+      previous.closeDoor();
+      addVehicleCollider(previous);
+    }
+    removeVehicleCollider(next);
+    next.inUse = true;
     hero = next;
   }
 
@@ -218,11 +274,8 @@ export function createGame(canvas) {
   }
 
   function syncVehicleColliders() {
-    for (const home of vehicleHome) {
-      const index = world.colliders.indexOf(home.vehicle._aabb);
-      if (index >= 0) world.colliders.splice(index, 1);
-      if (!home.vehicle.driveable) world.colliders.push(home.vehicle.collider());
-    }
+    for (const home of vehicleHome) removeVehicleCollider(home.vehicle);
+    for (const home of vehicleHome) addVehicleCollider(home.vehicle);
   }
 
   function spawnCheatVehicle(type) {
@@ -244,7 +297,7 @@ export function createGame(canvas) {
       driveable: true,
     });
     vehicle.cheat = true;
-    world.colliders.push(vehicle.collider());
+    addVehicleCollider(vehicle);
     vehicleHome.push({
       vehicle,
       x: vehicle.x,
@@ -277,8 +330,14 @@ export function createGame(canvas) {
     }
     mode = 'foot';
     view = 'follow';
+    approach = null;
+    pendingEnter = null;
+    pendingExit = null;
     removeCheatVehicles();
-    for (const home of vehicleHome) home.vehicle.driveable = home.driveable;
+    for (const home of vehicleHome) {
+      home.vehicle.inUse = false;
+      home.vehicle.closeDoor();
+    }
     hero = vehicleHome.find((home) => home.driveable)?.vehicle ?? hero;
     placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
     yaw = spawn.heading;
@@ -338,10 +397,15 @@ export function createGame(canvas) {
     || blocked(x - fx * offset, z - fz * offset, radius, cols);
 }
 
-function collidersFor(includeHero) {
+function collidersFor(includeHero, ignore) {
     scratch.length = 0;
-    for (const c of world.colliders) scratch.push(c);
-    if (includeHero) scratch.push(hero.collider());
+    for (const c of world.colliders) {
+      if (ignore && c === ignore._aabb) continue;
+      scratch.push(c);
+    }
+    if (includeHero && hero && hero !== ignore && !scratch.includes(hero.collider())) {
+      scratch.push(hero.collider());
+    }
     return scratch;
   }
 
@@ -354,12 +418,26 @@ function collidersFor(includeHero) {
     hero.speed = 0;
   }
 
+  // Opens the door and waits until it has swung before the character sits down.
+  function beginEnter(vehicle) {
+    approach = null;
+    vehicle.openDoor();
+    pendingEnter = { vehicle, phase: 'open', hold: 0.35 };
+  }
+
+  function doorReady(vehicle) {
+    return !vehicle.door || vehicle.door.open >= 0.82;
+  }
+
   function exitCar() {
-    const h = hero.heading;
+    const vehicle = hero;
     const spots = [
-      { x: hero.x - Math.cos(h) * 2.15, z: hero.z + Math.sin(h) * 2.15 },
-      { x: hero.x + Math.cos(h) * 2.15, z: hero.z - Math.sin(h) * 2.15 },
-      { x: hero.x - Math.sin(h) * 3.3, z: hero.z - Math.cos(h) * 3.3 },
+      sideSpot(vehicle, -1),
+      sideSpot(vehicle, 1),
+      {
+        x: vehicle.x - Math.sin(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
+        z: vehicle.z - Math.cos(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
+      },
     ];
     const cols = world.colliders;
     let spot = spots[0];
@@ -373,12 +451,17 @@ function collidersFor(includeHero) {
     mode = 'foot';
     player.x = spot.x;
     player.z = spot.z;
-    player.heading = h;
+    player.heading = Math.atan2(vehicle.x - spot.x, vehicle.z - spot.z);
     player.group.position.set(spot.x, WALK_TOP + world.ground(spot.x, spot.z), spot.z);
-    player.group.rotation.set(0, h, 0);
+    player.group.rotation.set(0, player.heading, 0);
     setPose(player, 'stand');
-    hero.speed = 0;
-    hero.braking = false;
+    vehicle.speed = 0;
+    vehicle.braking = false;
+    vehicle.openDoor();
+    pendingExit = { vehicle, timer: 0.7 };
+    // The parked car becomes solid again once the character is out.
+    addVehicleCollider(vehicle);
+    vehicle.inUse = false;
   }
 
   function moveYaw() {
@@ -387,7 +470,7 @@ function collidersFor(includeHero) {
     return yaw;
   }
 
-  function updateFoot(dt, time) {
+  function updateWalk(dt, time) {
     let ix = 0;
     let iz = 0;
     const face = moveYaw();
@@ -417,12 +500,67 @@ function collidersFor(includeHero) {
     player.z = step.z;
     player.group.position.set(player.x, WALK_TOP + world.ground(player.x, player.z), player.z);
     animateActor(player, speed, time, dt);
+  }
+
+  // Walks the character to the door of the picked vehicle.
+  function updateApproach(dt, time) {
+    const target = approach;
+    const dx = target.x - player.x;
+    const dz = target.z - player.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.55) {
+      beginEnter(target.vehicle);
+      return;
+    }
+    const speed = 4.4;
+    const step = moveCircle(
+      player.x,
+      player.z,
+      (dx / dist) * speed * dt,
+      (dz / dist) * speed * dt,
+      player.radius,
+      collidersFor(true, target.vehicle),
+    );
+    player.x = step.x;
+    player.z = step.z;
+    player.group.position.set(player.x, WALK_TOP + world.ground(player.x, player.z), player.z);
+    player.heading = Math.atan2(dx, dz);
+    player.group.rotation.y = player.heading;
+    animateActor(player, speed, time, dt);
+    target.timer += dt;
+    if (target.timer > 8) {
+      approach = null;
+      flash = { text: t('approachFail'), timer: 1.6 };
+    }
+  }
+
+  function updateFoot(dt, time) {
+    if (pendingExit) {
+      pendingExit.timer -= dt;
+      if (pendingExit.timer <= 0) {
+        pendingExit.vehicle.closeDoor();
+        pendingExit = null;
+      }
+    }
+    if (approach && (input.w || input.a || input.s || input.d)) approach = null;
+    if (approach) {
+      updateApproach(dt, time);
+    } else {
+      updateWalk(dt, time);
+    }
 
     if (input.consume('interact')) {
-      const target = nearestVehicle(player.x, player.z);
-      if (target) {
-        activateHero(target);
-        enterCar();
+      if (approach) {
+        approach = null;
+      } else {
+        const target = findEnterableVehicle(player.x, player.z);
+        if (target) {
+          const spot = approachSpot(target);
+          approach = { vehicle: target, x: spot.x, z: spot.z, timer: 0 };
+          input.release();
+        } else {
+          flash = { text: t('noVehicle'), timer: 1.6 };
+        }
       }
     }
   }
@@ -466,7 +604,9 @@ function collidersFor(includeHero) {
     );
     hero.pitch = -Math.atan2(nose - hero.y, ahead);
 
-    if (input.consume('interact') && Math.abs(hero.speed) < 2.5) exitCar();
+    // Only leave the car once it is slow enough, but keep the key pending so
+    // a press while moving fast still works once the car has slowed down.
+    if (Math.abs(hero.speed) < 2.5 && input.consume('interact')) exitCar();
   }
 
   function updatePeds(dt, time) {
@@ -582,12 +722,14 @@ function collidersFor(includeHero) {
       promptEl.style.opacity = '0';
     } else {
       setText(speedEl, t('onFoot'));
-      setText(hintEl, view === 'follow'
+      const base = view === 'follow'
         ? t('hintFollow', keys)
-        : t('hintFixed', { ...keys, view: viewLabel() }));
-      const near = nearestVehicle(player.x, player.z);
-      promptEl.textContent = near ? t('enterCar', keys) : '';
-      promptEl.style.opacity = near ? '1' : '0';
+        : t('hintFixed', { ...keys, view: viewLabel() });
+      setText(hintEl, flash ? flash.text : approach ? t('approachCar') : base);
+      const near = findEnterableVehicle(player.x, player.z);
+      const showPrompt = Boolean(near) && !approach;
+      promptEl.textContent = showPrompt ? t('enterCar', keys) : '';
+      promptEl.style.opacity = showPrompt ? '1' : '0';
     }
   }
 
@@ -690,10 +832,32 @@ function collidersFor(includeHero) {
       if (view !== 'follow') document.exitPointerLock();
     }
 
+    if (flash) {
+      flash.timer -= dt;
+      if (flash.timer <= 0) flash = null;
+    }
+
     if (!started) {
       yaw = Math.PI + Math.sin(elapsed * 0.28) * 0.42;
       pitch = 0.34;
       animateActor(player, 0, elapsed, dt);
+    } else if (pendingEnter) {
+      input.consume('interact');
+      const vehicle = pendingEnter.vehicle;
+      if (pendingEnter.phase === 'open') {
+        if (doorReady(vehicle)) {
+          activateHero(vehicle);
+          enterCar();
+          pendingEnter.phase = 'hold';
+        }
+      } else {
+        pendingEnter.hold -= dt;
+        if (pendingEnter.hold <= 0) {
+          vehicle.closeDoor();
+          pendingEnter = null;
+        }
+      }
+      if (mode === 'drive' && pendingEnter?.phase === 'hold') updateDrive(dt);
     } else if (mode === 'foot') {
       updateFoot(dt, elapsed);
     } else {

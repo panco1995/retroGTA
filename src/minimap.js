@@ -92,7 +92,7 @@ export function createMinimap(canvas, world) {
       ctx.drawImage(base, 0, 0);
       for (const v of vehicles) {
         const [x, y] = project(v.x, v.z);
-        ctx.fillStyle = v.driveable ? '#f0d48a' : '#d7d3c8';
+        ctx.fillStyle = v.inUse ? '#f0d48a' : '#d7d3c8';
         ctx.fillRect(x - 2, y - 2, 4, 4);
       }
       const [px, py] = project(player.x, player.z);

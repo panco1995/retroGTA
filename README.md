@@ -63,11 +63,11 @@ Settings, and Controls on the pause menu, rebind the keys below. Click a binding
 | Shift | Run | — |
 | Mouse | Turn the follow camera | Turn the follow camera |
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
-| E | Enter the dark sedan when close | Exit when moving slowly |
+| E | Walk to the nearest door, open it, and get in | Exit when moving slowly |
 | Space | — | Brake |
 | Esc | Pause. Language, cheats, restart, or exit | Pause. Language, cheats, restart, or exit |
 
-The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the driveable car. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
+The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the car you are driving. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
 
 ## Map data
 
@@ -88,7 +88,7 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `gate` | Supported. One gate and a short approach road |
 | `trees` | Supported. Placed trees |
 | `safehouseProps` | Supported for `marker`, `hydrant`, and `trash` |
-| `vehicles` | 15 vehicle types are supported; see [Supported vehicles](#supported-vehicles). Unknown types fall back to `sedan`. `driveable` marks the car the player can enter |
+| `vehicles` | 15 vehicle types are supported; see [Supported vehicles](#supported-vehicles). Unknown types fall back to `sedan`. Every vehicle can be entered, `driveable` marks the car the player starts next to |
 | `pedestrians` | Supported. People who walk a path, with shirt, pants, and an optional cap |
 | `bounds` | The reader accepts extra collision walls. The current map leaves this field out |
 
@@ -100,7 +100,7 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 
 | `type` | Vehicle | Notes |
 | --- | --- | --- |
-| `sedan` | Sedan | Four-door three-box car, the default; the driveable car in the current map |
+| `sedan` | Sedan | Four-door three-box car, the default; the car the player starts next to |
 | `taxi` | Taxi | Sedan body with a roof sign |
 | `hatchback` | Hatchback | Short body with a liftback tailgate |
 | `suv` | SUV | Tall body, roof rails, larger wheels |

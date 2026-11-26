@@ -979,7 +979,9 @@ const platW = Math.min(w * 0.34, 2.4);
       color: spot.color,
       driveable: !!spot.driveable,
     });
-    if (!vehicle.driveable) colliders.push(vehicle.collider());
+    // Every parked vehicle is solid; the one being driven is removed from the
+    // collider list by the game.
+    colliders.push(vehicle.collider());
   }
 
   const pedestrians = MAP.pedestrians.map((spec) => ({

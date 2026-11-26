@@ -483,6 +483,68 @@ const BUILDERS = {
 
 export const VEHICLE_TYPES = Object.keys(BUILDERS);
 
+// Door panels per vehicle type: the lower body side panel on the driver's side.
+// Local space of the vehicle: y is the panel centre, z is the hinge (front) edge,
+// w/h are the panel size. Vehicles without a cab (excavator, tractor) have none.
+const DOOR_SPECS = {
+  sedan: { y: 0.72, z: 0.6, w: 1.15, h: 0.42 },
+  taxi: { y: 0.72, z: 0.6, w: 1.15, h: 0.42 },
+  police: { y: 0.72, z: 0.6, w: 1.15, h: 0.42 },
+  hatchback: { y: 0.7, z: 0.5, w: 1.05, h: 0.42 },
+  suv: { y: 0.92, z: 0.65, w: 1.2, h: 0.6 },
+  pickup: { y: 1.15, z: 1.3, w: 0.85, h: 0.5 },
+  sports: { y: 0.6, z: 0.95, w: 1.0, h: 0.38 },
+  van: { y: 0.95, z: 1.65, w: 0.95, h: 1.1 },
+  bus: { y: 1.7, z: 4.3, w: 1.0, h: 1.8 },
+  truck: { y: 1.35, z: 3.15, w: 0.9, h: 1.35 },
+  ambulance: { y: 1.2, z: 1.5, w: 0.9, h: 1.2 },
+  firetruck: { y: 1.45, z: 3.85, w: 0.9, h: 1.5 },
+  mixer: { y: 1.4, z: 3.6, w: 0.9, h: 1.4 },
+  excavator: { y: 2.05, z: 1.15, w: 0.95, h: 1.05 },
+  tractor: { y: 1.55, z: 0.15, w: 0.7, h: 0.75 },
+};
+
+const DOOR_OPEN_ANGLE = 1.2;
+
+// The body paint is the material of the largest box in the build, so the door
+// panel matches the body without every builder having to hand it over.
+function bodyMaterial(group) {
+  let best = null;
+  let bestVolume = 0;
+  const size = new THREE.Vector3();
+  group.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry) return;
+    obj.geometry.computeBoundingBox();
+    obj.geometry.boundingBox.getSize(size);
+    const volume = size.x * size.y * size.z;
+    if (volume > bestVolume) {
+      bestVolume = volume;
+      best = obj.material;
+    }
+  });
+  return best;
+}
+
+// Hinged on the front edge, panel extends backwards, swings out on local -X.
+function addDoor(group, width, spec, mat) {
+  const paint = mat ? mat.clone() : solid(0x22262a, 0.6);
+  if (paint.color) paint.color.multiplyScalar(0.55);
+  const hinge = new THREE.Group();
+  hinge.position.set(-(width / 2) - 0.04, spec.y, spec.z);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.06, spec.h, spec.w), paint);
+  panel.position.set(-0.05, 0, -spec.w / 2);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  const window = new THREE.Mesh(
+    new THREE.BoxGeometry(0.02, spec.h * 0.42, spec.w * 0.5),
+    solid(0x9ec4d4, 0.15, 0.3),
+  );
+  window.position.set(-0.09, spec.h * 0.12, -spec.w * 0.42);
+  hinge.add(panel, window);
+  group.add(hinge);
+  return hinge;
+}
+
 const footprints = new Map();
 
 export function vehicleFootprint(type) {
@@ -518,6 +580,8 @@ export function createVehicle(cfg) {
     radius: built.radius,
     wheels: built.wheels,
     tails: built.tails,
+    door: null,
+    inUse: false,
     _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     sync() {
       group.rotation.order = 'YXZ';
@@ -525,16 +589,38 @@ export function createVehicle(cfg) {
       group.rotation.y = this.heading;
       group.rotation.x = this.pitch || 0;
     },
-    collider() {
+    aabb() {
       const c = Math.abs(Math.cos(this.heading));
       const s = Math.abs(Math.sin(this.heading));
-      const hx = (this.length * s + this.width * c) / 2;
-      const hz = (this.length * c + this.width * s) / 2;
+      return {
+        hx: (this.length * s + this.width * c) / 2,
+        hz: (this.length * c + this.width * s) / 2,
+      };
+    },
+    collider() {
+      const { hx, hz } = this.aabb();
       this._aabb.minX = this.x - hx;
       this._aabb.maxX = this.x + hx;
       this._aabb.minZ = this.z - hz;
       this._aabb.maxZ = this.z + hz;
       return this._aabb;
+    },
+    // Half extent of the body along its own side axis, so a spot beside the
+    // car can be placed outside the collider even for a rotated vehicle.
+    sideExtent() {
+      const c = Math.abs(Math.cos(this.heading));
+      const s = Math.abs(Math.sin(this.heading));
+      const { hx, hz } = this.aabb();
+      return hx * c + hz * s;
+    },
+    doorSpec() {
+      return DOOR_SPECS[type] ?? null;
+    },
+    openDoor() {
+      if (this.door) this.door.target = 1;
+    },
+    closeDoor() {
+      if (this.door) this.door.target = 0;
     },
     updateVisual(dt) {
       this.sync();
@@ -544,8 +630,19 @@ export function createVehicle(cfg) {
       }
       const glowAmount = this.braking ? 1.6 : 0.28;
       for (const tail of this.tails) tail.material.emissiveIntensity = glowAmount;
+      if (this.door) {
+        const door = this.door;
+        const k = 1 - Math.pow(0.0005, dt);
+        door.open += (door.target - door.open) * k;
+        if (Math.abs(door.target - door.open) < 0.002) door.open = door.target;
+        door.hinge.rotation.y = door.open * DOOR_OPEN_ANGLE;
+      }
     },
   };
+  const doorSpec = DOOR_SPECS[type];
+  if (doorSpec) {
+    state.door = { hinge: addDoor(group, built.width, doorSpec, bodyMaterial(group)), open: 0, target: 0 };
+  }
   state.sync();
   return state;
 }

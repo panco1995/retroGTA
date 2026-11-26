@@ -18,7 +18,11 @@
       <div id="speed"></div>
       <canvas id="map" width="168" height="168"></canvas>
       <div id="hint"></div>
-      <div id="prompt"></div>
+      <div id="prompt" role="status" aria-live="polite">
+        <span id="prompt-key" class="prompt-key"></span>
+        <span id="prompt-label" class="prompt-label"></span>
+      </div>
+      <div id="toast" role="status" aria-live="polite"></div>
     </div>
 
     <div id="menu">

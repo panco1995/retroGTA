@@ -21,6 +21,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, stop for pedestrians and the player, and can be carjacked
 - Building collision; people and cars follow the ground height; movement stays on walkable ground
 - GTA-style radar minimap, plus a full-island map in the pause menu
+- Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Settings, About) with rebindable keys saved in the browser
 - Pause menu (Esc): map, controls, language, cheats, restart, and exit
 - Cheats spawn a chosen vehicle beside the player; restart removes them

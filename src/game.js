@@ -14,6 +14,9 @@ import { openMainMenu } from './menu.js';
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 
 const ENTER_RANGE = 20;
+// The prompt only appears when the player is close, even though pressing the
+// interact key can still walk to a car from further away.
+const PROMPT_RANGE = 5.5;
 
 const CHEAT_COLORS = {
   sedan: '#3f4a52',
@@ -129,6 +132,7 @@ export function createGame(canvas) {
   let pendingEnter = null;
   let pendingExit = null;
   let flash = null;
+  let hintTime = 0;
   let yaw = Math.PI;
   let pitch = 0.32;
   const scratch = [];
@@ -155,6 +159,9 @@ export function createGame(canvas) {
   const speedEl = document.getElementById('speed');
   const hintEl = document.getElementById('hint');
   const promptEl = document.getElementById('prompt');
+  const promptKeyEl = document.getElementById('prompt-key');
+  const promptLabelEl = document.getElementById('prompt-label');
+  const toastEl = document.getElementById('toast');
   const menuEl = document.getElementById('menu');
   const hudEl = document.getElementById('hud');
   const pauseEl = document.getElementById('pause');
@@ -186,9 +193,9 @@ export function createGame(canvas) {
   }
 
   // Every vehicle can be driven, so the only filter is the pick up range.
-  function findEnterableVehicle(x, z) {
+  function findEnterableVehicle(x, z, range = ENTER_RANGE) {
     let best = null;
-    let bestDist = ENTER_RANGE;
+    let bestDist = range;
     for (const vehicle of world.vehicles) {
       if (vehicle.inUse) continue;
       const dist = vehicleDistance(vehicle, x, z);
@@ -399,6 +406,7 @@ export function createGame(canvas) {
     crowd.reset();
     traffic.reset();
     world.reset();
+    hintTime = 12;
     input.release();
   }
 
@@ -790,28 +798,67 @@ function collidersFor(includeHero, ignore) {
     if (el.textContent !== text) el.textContent = text;
   }
 
+  // A small keycap plus a verb: the way most modern games show a contextual
+  // action. status hides the keycap for messages such as "heading to car".
+  function setPrompt(show, key = '', label = '', status = false) {
+    if (!show) {
+      promptEl.classList.remove('show');
+      return;
+    }
+    setText(promptKeyEl, key);
+    setText(promptLabelEl, label);
+    promptEl.classList.toggle('status', status);
+    promptEl.classList.add('show');
+  }
+
+  function setToast(text) {
+    if (text) {
+      setText(toastEl, text);
+      toastEl.classList.add('show');
+    } else {
+      toastEl.classList.remove('show');
+    }
+  }
+
   function updateHud() {
     if (!started) {
       setText(speedEl, '');
       setText(hintEl, '');
-      promptEl.style.opacity = '0';
+      setPrompt(false);
+      setToast('');
       return;
     }
+
     const keys = keyVars();
+    hintEl.classList.toggle('fade', hintTime <= 0);
+    setToast(flash ? flash.text : '');
+
     if (mode === 'drive') {
       setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
       setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
-      promptEl.style.opacity = '0';
-    } else {
-      setText(speedEl, t('onFoot'));
-      const base = view === 'follow'
+      const canExit = Math.abs(hero.speed) < 2.5 && !pendingEnter;
+      setPrompt(canExit, keys.interact, t('exitCar'));
+      return;
+    }
+
+    setText(speedEl, t('onFoot'));
+    setText(
+      hintEl,
+      view === 'follow'
         ? t('hintFollow', keys)
-        : t('hintFixed', { ...keys, view: viewLabel() });
-      setText(hintEl, flash ? flash.text : approach ? t('approachCar') : base);
-      const near = findEnterableVehicle(player.x, player.z);
-      const showPrompt = Boolean(near) && !approach;
-      promptEl.textContent = showPrompt ? t('enterCar', keys) : '';
-      promptEl.style.opacity = showPrompt ? '1' : '0';
+        : t('hintFixed', { ...keys, view: viewLabel() }),
+    );
+
+    if (approach || pendingEnter) {
+      setPrompt(true, '', t('approachCar'), true);
+      return;
+    }
+
+    const near = findEnterableVehicle(player.x, player.z, PROMPT_RANGE);
+    if (near) {
+      setPrompt(true, keys.interact, near.traffic ? t('stealCar') : t('enterCar'));
+    } else {
+      setPrompt(false);
     }
   }
 
@@ -857,6 +904,7 @@ function collidersFor(includeHero, ignore) {
   document.getElementById('menu-start').addEventListener('click', () => {
     if (started) return;
     started = true;
+    hintTime = 12;
     menuEl.classList.add('hidden');
     hudEl.classList.remove('hidden');
     yaw = player.heading;
@@ -922,6 +970,8 @@ function collidersFor(includeHero, ignore) {
       requestAnimationFrame(frame);
       return;
     }
+
+    if (hintTime > 0) hintTime = Math.max(0, hintTime - dt);
 
     if (started && input.consume('camera')) {
       view = view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow';

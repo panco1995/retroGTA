@@ -429,7 +429,8 @@ function collidersFor(includeHero) {
 
   function updateDrive(dt) {
     const throttle = (input.w ? 1 : 0) - (input.s ? 1 : 0);
-    const steerInput = (input.d ? 1 : 0) - (input.a ? 1 : 0);
+    // heading 0 points the nose toward +Z, so a right turn must decrease heading.
+    const steerInput = (input.a ? 1 : 0) - (input.d ? 1 : 0);
     hero.braking = input.brake && Math.abs(hero.speed) > 0.2;
     const accel = throttle > 0 ? 9.5 : 7.5;
     hero.speed += throttle * accel * dt;
@@ -712,5 +713,16 @@ function collidersFor(includeHero) {
   updateCamera(0.016, true);
   requestAnimationFrame(frame);
 
-  return { player, hero, world };
+  // Debug handle: returned in dev only. import.meta.env.DEV is false in builds,
+  // so this whole branch is statically stripped from the bundle.
+  return import.meta.env.DEV
+    ? {
+        player,
+        world,
+        get hero() { return hero; },
+        get mode() { return mode; },
+        get started() { return started; },
+        get paused() { return paused; },
+      }
+    : null;
 }

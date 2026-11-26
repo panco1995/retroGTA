@@ -47,6 +47,8 @@ Open the local address printed in the terminal (default `http://127.0.0.1:5173/`
 ```bash
 npm run build    # writes dist/
 npm run preview  # serves the build
+make             # same build, writes dist/
+make single      # one file, dist/retrogta.html
 ```
 
 ## Controls

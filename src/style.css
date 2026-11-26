@@ -312,6 +312,13 @@ body.rebinding #map {
   margin-top: 4px;
 }
 
+.menu-author {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.22em;
+}
+
 .boot-copy {
   margin-top: 8px;
   color: var(--muted);

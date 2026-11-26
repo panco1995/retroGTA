@@ -46,6 +46,8 @@ npm run dev
 ```bash
 npm run build    # 输出到 dist/
 npm run preview  # 预览构建结果
+make             # 同样打包到 dist/
+make single      # 打成单个文件 dist/retrogta.html
 ```
 
 ## 操作

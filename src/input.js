@@ -5,6 +5,11 @@ const BLOCK = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight
 export function createInput(canvas) {
   const down = new Set();
   const pressed = new Set();
+  let aim = false;
+
+  function mouseCode(button) {
+    return button >= 0 && button <= 2 ? `Mouse${button}` : '';
+  }
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat || isCapturing()) return;
@@ -16,6 +21,26 @@ export function createInput(canvas) {
   window.addEventListener('keyup', (e) => {
     down.delete(e.code);
   });
+
+  window.addEventListener('mousedown', (e) => {
+    if (isCapturing()) return;
+    const code = mouseCode(e.button);
+    if (!code) return;
+    const locked = document.pointerLockElement === canvas;
+    if (!locked && e.target !== canvas) return;
+    // Follow camera uses the first click to lock the pointer, not to attack.
+    if (aim && !locked) return;
+    down.add(code);
+    pressed.add(code);
+    if (e.button !== 0) e.preventDefault();
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    const code = mouseCode(e.button);
+    if (code) down.delete(code);
+  });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('blur', () => {
     down.clear();
@@ -44,6 +69,9 @@ export function createInput(canvas) {
     lock() {
       const pending = canvas.requestPointerLock?.();
       if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    },
+    setAim(next) {
+      aim = next;
     },
   };
 }

@@ -1,6 +1,6 @@
 import { onLangChange, t } from './i18n.js';
 
-const ACTIONS = ['forward', 'back', 'left', 'right', 'run', 'brake', 'interact', 'camera'];
+const ACTIONS = ['forward', 'back', 'left', 'right', 'run', 'brake', 'attack', 'interact', 'camera'];
 
 const LABELS = {
   forward: 'bindForward',
@@ -8,6 +8,7 @@ const LABELS = {
   left: 'bindLeft',
   right: 'bindRight',
   run: 'bindRun',
+  attack: 'bindAttack',
   brake: 'bindBrake',
   interact: 'bindInteract',
   camera: 'bindCamera',
@@ -19,14 +20,17 @@ const DEFAULTS = {
   left: 'KeyA',
   right: 'KeyD',
   run: 'ShiftLeft',
+  attack: 'Mouse0',
   brake: 'Space',
   interact: 'KeyE',
   camera: 'KeyV',
 };
 
 const storageKey = 'retrogta.keys';
+const CODE = /^(?:Mouse[0-2]|[A-Za-z0-9]{1,24})$/;
 const listeners = new Set();
 const buttons = new Map();
+let swallowClick = false;
 
 let bindings = load();
 let listening = null;
@@ -35,15 +39,28 @@ function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey) || 'null');
     const next = {};
-    const seen = new Set();
+    const used = new Set();
+
+    // Keep every saved binding, including ones from before a new action existed.
     for (const action of ACTIONS) {
-      const code = raw?.[action];
-      if (typeof code !== 'string' || !/^[A-Za-z0-9]{1,24}$/.test(code) || code === 'Escape') {
+      const saved = raw?.[action];
+      if (saved == null) continue;
+      if (typeof saved !== 'string' || !CODE.test(saved) || saved === 'Escape') {
         return { ...DEFAULTS };
       }
-      if (seen.has(code)) return { ...DEFAULTS };
-      seen.add(code);
+      if (used.has(saved)) return { ...DEFAULTS };
+      next[action] = saved;
+      used.add(saved);
+    }
+
+    // Fill newly added actions without stealing a saved key.
+    for (const action of ACTIONS) {
+      if (next[action]) continue;
+      const pool = [DEFAULTS[action], 'KeyG', 'KeyH', 'KeyJ', 'KeyK'];
+      const code = pool.find((candidate) => !used.has(candidate));
+      if (!code) return { ...DEFAULTS };
       next[action] = code;
+      used.add(code);
     }
     return next;
   } catch {
@@ -99,6 +116,9 @@ function namedKey(code) {
 export function keyName(code) {
   const named = namedKey(code);
   if (named) return named;
+  if (code === 'Mouse0') return t('mouseLeft');
+  if (code === 'Mouse1') return t('mouseMiddle');
+  if (code === 'Mouse2') return t('mouseRight');
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
   if (code.startsWith('Numpad')) return code.slice(6);
@@ -109,6 +129,8 @@ export function keyVars() {
   return {
     move: ['forward', 'left', 'back', 'right'].map((action) => keyName(bindings[action])).join(' '),
     run: keyName(bindings.run),
+    jump: keyName(bindings.brake),
+    attack: keyName(bindings.attack),
     brake: keyName(bindings.brake),
     interact: keyName(bindings.interact),
     camera: keyName(bindings.camera),
@@ -236,5 +258,25 @@ export function initBindings() {
       return;
     }
     assign(listening, event.code);
+  }, true);
+
+  window.addEventListener('mousedown', (event) => {
+    if (listening === null || event.button > 2) return;
+    event.preventDefault();
+    event.stopPropagation();
+    swallowClick = true;
+    assign(listening, `Mouse${event.button}`);
+  }, true);
+
+  window.addEventListener('click', (event) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+
+  window.addEventListener('contextmenu', (event) => {
+    if (listening === null && !swallowClick) return;
+    event.preventDefault();
   }, true);
 }

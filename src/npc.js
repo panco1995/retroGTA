@@ -894,9 +894,32 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     active.length = 0;
   }
 
+  // A punch sends nearby people in front into the existing panic run.
+  function hit(x, z, heading, range = 1.8) {
+    const fx = Math.sin(heading);
+    const fz = Math.cos(heading);
+    let hits = 0;
+    for (const slot of active) {
+      const dx = slot.x - x;
+      const dz = slot.z - z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > range) continue;
+      if (dist > 0.01 && (dx * fx + dz * fz) / dist < 0.2) continue;
+      slot.idle = 0;
+      clearChat(slot);
+      slot.panic = Math.max(slot.panic, 1.1);
+      const len = dist || 1;
+      slot.dodgeX = dx / len;
+      slot.dodgeZ = dz / len;
+      hits += 1;
+    }
+    return hits;
+  }
+
   return {
     update,
     reset,
+    hit,
     positions() {
       return active;
     },

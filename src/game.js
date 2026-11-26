@@ -3,7 +3,7 @@ import { WALK_TOP } from './config.js';
 import { brickTexture } from './materials.js';
 import { createInput } from './input.js';
 import { blocked, moveCircle } from './collision.js';
-import { animateActor, createActor, setPose } from './actor.js';
+import { ATTACK_TIME, animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
@@ -17,6 +17,9 @@ const ENTER_RANGE = 20;
 // The prompt only appears when the player is close, even though pressing the
 // interact key can still walk to a car from further away.
 const PROMPT_RANGE = 5.5;
+const JUMP_SPEED = 7.4;
+const GRAVITY = 24;
+const ATTACK_RANGE = 1.9;
 
 const CHEAT_COLORS = {
   sedan: '#3f4a52',
@@ -88,6 +91,10 @@ export function createGame(canvas) {
   player.x = spawn.x;
   player.z = spawn.z;
   player.heading = spawn.heading;
+  player.jumpY = 0;
+  player.jumpV = 0;
+  player.airborne = false;
+  player.attack = 0;
   player.group.position.set(spawn.x, WALK_TOP + world.ground(spawn.x, spawn.z), spawn.z);
   player.group.rotation.y = spawn.heading;
   scene.add(player.group);
@@ -362,6 +369,10 @@ export function createGame(canvas) {
     approach = null;
     pendingEnter = null;
     pendingExit = null;
+    player.jumpY = 0;
+    player.jumpV = 0;
+    player.airborne = false;
+    player.attack = 0;
     removeCheatVehicles();
     // A car taken from traffic is not in vehicleHome; leave it parked where it
     // was instead of keeping it marked as driven with no collider.
@@ -400,6 +411,7 @@ export function createGame(canvas) {
       const home = pedHome[index];
       ped.index = 0;
       ped.dir = 1;
+      ped.stun = 0;
       placeOnFoot(ped, home.x, home.z, home.heading);
       setPose(ped, 'stand');
     });
@@ -454,11 +466,16 @@ function collidersFor(includeHero, ignore) {
 
   function enterCar() {
     mode = 'drive';
+    player.jumpY = 0;
+    player.jumpV = 0;
+    player.airborne = false;
+    player.attack = 0;
     hero.group.attach(player.group);
     player.group.position.set(-0.36, 0.22, -0.15);
     player.group.rotation.set(0, 0, 0);
     setPose(player, 'sit');
     hero.speed = 0;
+    input.release();
   }
 
   // Opens the door and waits until it has swung before the character sits down.
@@ -492,6 +509,10 @@ function collidersFor(includeHero, ignore) {
     }
     scene.attach(player.group);
     mode = 'foot';
+    player.jumpY = 0;
+    player.jumpV = 0;
+    player.airborne = false;
+    player.attack = 0;
     player.x = spot.x;
     player.z = spot.z;
     player.heading = Math.atan2(vehicle.x - spot.x, vehicle.z - spot.z);
@@ -505,12 +526,45 @@ function collidersFor(includeHero, ignore) {
     // The parked car becomes solid again once the character is out.
     addVehicleCollider(vehicle);
     vehicle.inUse = false;
+    input.release();
   }
 
   function moveYaw() {
     if (view === 'top') return Math.PI;
     if (view === 'iso') return Math.PI * 0.75;
     return yaw;
+  }
+
+  function updateJump(dt) {
+    if (input.consume('brake') && !player.airborne) {
+      player.airborne = true;
+      player.jumpV = JUMP_SPEED;
+    }
+    if (!player.airborne) return;
+    player.jumpV -= GRAVITY * dt;
+    player.jumpY += player.jumpV * dt;
+    if (player.jumpY <= 0) {
+      player.jumpY = 0;
+      player.jumpV = 0;
+      player.airborne = false;
+    }
+  }
+
+  function strike() {
+    crowd.hit(player.x, player.z, player.heading, ATTACK_RANGE);
+    const fx = Math.sin(player.heading);
+    const fz = Math.cos(player.heading);
+    for (const ped of peds) {
+      const dx = ped.x - player.x;
+      const dz = ped.z - player.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > ATTACK_RANGE) continue;
+      if (dist > 0.01 && (dx * fx + dz * fz) / dist < 0.2) continue;
+      ped.stun = 1.1;
+      const len = dist || 1;
+      ped.stunX = dx / len;
+      ped.stunZ = dz / len;
+    }
   }
 
   function updateWalk(dt, time) {
@@ -541,7 +595,11 @@ function collidersFor(includeHero, ignore) {
     const step = moveCircle(player.x, player.z, ix * speed * dt, iz * speed * dt, player.radius, collidersFor(true));
     player.x = step.x;
     player.z = step.z;
-    player.group.position.set(player.x, WALK_TOP + world.ground(player.x, player.z), player.z);
+    player.group.position.set(
+      player.x,
+      WALK_TOP + world.ground(player.x, player.z) + player.jumpY,
+      player.z,
+    );
     animateActor(player, speed, time, dt);
   }
 
@@ -591,14 +649,23 @@ function collidersFor(includeHero, ignore) {
         pendingExit = null;
       }
     }
-    if (approach && (input.w || input.a || input.s || input.d)) approach = null;
+    updateJump(dt);
+    if (player.attack > 0) player.attack = Math.max(0, player.attack - dt);
+    if (input.consume('attack') && player.attack <= 0 && !player.airborne) {
+      player.heading = moveYaw();
+      player.group.rotation.y = player.heading;
+      player.attack = ATTACK_TIME;
+      strike();
+    }
+
+    if (approach && (input.w || input.a || input.s || input.d || player.airborne)) approach = null;
     if (approach) {
       updateApproach(dt, time);
     } else {
       updateWalk(dt, time);
     }
 
-    if (input.consume('interact')) {
+    if (input.consume('interact') && !player.airborne) {
       if (approach) {
         approach = null;
       } else {
@@ -678,6 +745,26 @@ function collidersFor(includeHero, ignore) {
 
   function updatePeds(dt, time) {
     for (const ped of peds) {
+      if (ped.stun > 0) {
+        ped.stun -= dt;
+        const run = 4.2;
+        const next = moveCircle(
+          ped.x,
+          ped.z,
+          ped.stunX * run * dt,
+          ped.stunZ * run * dt,
+          ped.radius,
+          collidersFor(true),
+        );
+        ped.x = next.x;
+        ped.z = next.z;
+        ped.heading = Math.atan2(ped.stunX, ped.stunZ);
+        ped.group.position.set(ped.x, WALK_TOP + world.ground(ped.x, ped.z), ped.z);
+        ped.group.rotation.y = ped.heading;
+        animateActor(ped, run, time + ped.x, dt);
+        continue;
+      }
+
       const danger = threatAt(ped.x, ped.z);
       if (danger) {
         const ax = ped.x - danger.x;
@@ -849,6 +936,11 @@ function collidersFor(includeHero, ignore) {
         : t('hintFixed', { ...keys, view: viewLabel() }),
     );
 
+    if (player.airborne) {
+      setPrompt(false);
+      return;
+    }
+
     if (approach || pendingEnter) {
       setPrompt(true, '', t('approachCar'), true);
       return;
@@ -909,6 +1001,7 @@ function collidersFor(includeHero, ignore) {
     hudEl.classList.remove('hidden');
     yaw = player.heading;
     pitch = 0.3;
+    input.release();
     input.lock();
   });
 
@@ -977,6 +1070,7 @@ function collidersFor(includeHero, ignore) {
       view = view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow';
       if (view !== 'follow') document.exitPointerLock();
     }
+    if (started) input.setAim(view === 'follow');
 
     if (flash) {
       flash.timer -= dt;
@@ -988,6 +1082,7 @@ function collidersFor(includeHero, ignore) {
       pitch = 0.34;
       animateActor(player, 0, elapsed, dt);
     } else if (pendingEnter) {
+      input.consume('attack');
       input.consume('interact');
       const vehicle = pendingEnter.vehicle;
       if (pendingEnter.phase === 'open') {
@@ -1007,6 +1102,7 @@ function collidersFor(includeHero, ignore) {
     } else if (mode === 'foot') {
       updateFoot(dt, elapsed);
     } else {
+      input.consume('attack');
       updateDrive(dt);
     }
 

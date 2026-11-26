@@ -272,6 +272,8 @@ export function setPose(actor, pose) {
   }
 }
 
+export const ATTACK_TIME = 0.34;
+
 function damp(current, target, dt) {
   const k = 1 - Math.pow(0.0015, dt);
   return current + (target - current) * k;
@@ -280,6 +282,20 @@ function damp(current, target, dt) {
 export function animateActor(actor, speed, time, dt) {
   if (actor.pose === 'sit') return;
   const p = actor.parts;
+
+  if (actor.airborne) {
+    p.leftLeg.rotation.x = damp(p.leftLeg.rotation.x, -0.65, dt);
+    p.rightLeg.rotation.x = damp(p.rightLeg.rotation.x, 0.35, dt);
+    p.leftArm.rotation.x = damp(p.leftArm.rotation.x, -0.95, dt);
+    p.rightArm.rotation.x = damp(p.rightArm.rotation.x, -0.95, dt);
+    p.leftArm.rotation.z = damp(p.leftArm.rotation.z, 0.14, dt);
+    p.rightArm.rotation.z = damp(p.rightArm.rotation.z, -0.14, dt);
+    p.torso.rotation.x = damp(p.torso.rotation.x, (actor.hunch ?? 0) + 0.08, dt);
+    p.torso.rotation.y = damp(p.torso.rotation.y, 0, dt);
+    actor.visual.position.y = 0;
+    return;
+  }
+
   const amp = THREE.MathUtils.clamp(speed / 3.2, 0, 1);
   const phase = time * (speed > 4.5 ? 11 : 8);
   const swing = Math.sin(phase) * amp * 0.85;
@@ -290,4 +306,17 @@ export function animateActor(actor, speed, time, dt) {
   const lean = (actor.hunch ?? 0) + Math.sin(time * 2.2) * 0.02 + amp * 0.06;
   p.torso.rotation.x = damp(p.torso.rotation.x, lean, dt);
   actor.visual.position.y = Math.abs(Math.sin(phase)) * 0.045 * amp;
+
+  if (actor.attack > 0) {
+    const progress = 1 - actor.attack / ATTACK_TIME;
+    const punch = Math.sin(THREE.MathUtils.clamp(progress, 0, 1) * Math.PI);
+    p.rightArm.rotation.x = -0.12 - punch * 1.4;
+    p.rightArm.rotation.z = damp(p.rightArm.rotation.z, -punch * 0.16, dt);
+    p.leftArm.rotation.z = damp(p.leftArm.rotation.z, -punch * 0.05, dt);
+    p.torso.rotation.y = damp(p.torso.rotation.y, -punch * 0.22, dt);
+  } else {
+    p.rightArm.rotation.z = damp(p.rightArm.rotation.z, 0, dt);
+    p.leftArm.rotation.z = damp(p.leftArm.rotation.z, 0, dt);
+    p.torso.rotation.y = damp(p.torso.rotation.y, 0, dt);
+  }
 }

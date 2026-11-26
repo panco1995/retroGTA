@@ -15,7 +15,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 
 ## Features
 
-- Walk, run, enter and exit vehicles, drive, and brake
+- Walk, run, jump, throw a punch, enter and exit vehicles, drive, and brake
 - Three cameras: follow, top-down, and 2.5D
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, stop for pedestrians and the player, and can be carjacked
@@ -49,7 +49,7 @@ make single      # one file, dist/retrogta.html
 
 Choose Start on the main menu. In the follow camera, move the mouse to look around. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
 
-Rebind keys in Settings (main menu) or Controls (pause menu): click a binding and press the new key. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses.
+Rebind keys in Settings (main menu) or Controls (pause menu): click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses.
 
 | Key | On foot | Driving |
 | --- | --- | --- |
@@ -58,7 +58,8 @@ Rebind keys in Settings (main menu) or Controls (pause menu): click a binding an
 | Mouse | Turn the follow camera | Turn the follow camera |
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
 | E | Walk to the nearest door, open it, and get in | Exit when moving slowly |
-| Space | — | Brake |
+| Space | Jump | Brake |
+| Left click | Punch | — |
 | Esc | Pause: map, controls, language, cheats, restart, or exit | Pause: map, controls, language, cheats, restart, or exit |
 
 The round radar at the bottom left shows the area around the player and rotates so the player faces up; driving fast widens the view. The arrow is the player, the cyan dot is the safehouse, and white dots are parked vehicles. Moving traffic and pedestrians are not shown. The pause map shows the whole island with north up. While driving, the top-right readout shows speed in km/h; reverse speed is negative.
@@ -140,7 +141,7 @@ The crowd draws from the kinds in `src/npc.js`. Hand-placed pedestrians in the m
 
 Weights in `KINDS` decide how often a kind appears; each spawn also rolls height, build, skin, hair, and clothing colors. To add a kind, append an entry to `KINDS` with a `weight` and a `make()` that returns the actor options (see the existing entries for the fields).
 
-The crowd reacts to traffic: people wait at the curb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the sidewalk. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them.
+The crowd reacts to traffic: people wait at the curb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the sidewalk. A punch sends nearby people running. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them.
 
 ## Traffic
 

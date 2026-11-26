@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { WALK_TOP } from './config.js';
 import { brickTexture } from './materials.js';
 import { createInput } from './input.js';
-import { blocked, moveCircle } from './collision.js';
+import { blocked, circleExitsFromObb, moveCircle, obbHitsCircle, vehicleBlocked } from './collision.js';
 import { ATTACK_TIME, animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
@@ -12,12 +12,17 @@ import { onLangChange, t, toggleLang } from './i18n.js';
 import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
+import { createBlood } from './blood.js';
 
 const ENTER_RANGE = 20;
 // The prompt only appears when the player is close, even though pressing the
 // interact key can still walk to a car from further away.
 const PROMPT_RANGE = 5.5;
 const JUMP_SPEED = 7.4;
+// A moving car is much heavier than a person. Creeping still shoves them
+// over; road speed runs them over. A stopped car stays solid.
+const KNOCK_SPEED = 1.8;
+const KILL_SPEED = 6;
 const GRAVITY = 24;
 const ATTACK_RANGE = 1.9;
 
@@ -136,13 +141,13 @@ export function createGame(canvas) {
   let mode = 'foot';
   let view = 'follow';
   let approach = null;
-  let pendingEnter = null;
-  let pendingExit = null;
   let flash = null;
   let hintTime = 0;
   let yaw = Math.PI;
   let pitch = 0.32;
   const scratch = [];
+  const staticCols = [];
+  const blood = createBlood(scene);
   const look = new THREE.Vector3();
   const desired = new THREE.Vector3();
   let camReady = false;
@@ -152,15 +157,15 @@ export function createGame(canvas) {
     camera,
     getFocus: () => (mode === 'drive' ? hero : player),
     avoid: () => peds,
+    getExtraColliders: () => (mode === 'drive' && hero ? [hero.collider()] : null),
+    getNeighbors: () => neighborBodies(),
   });
   const traffic = createTraffic({
     scene,
     world,
     camera,
     getFocus: () => (mode === 'drive' ? hero : player),
-    getPedestrians: () => crowd.positions(),
-    getFoot: () => (mode === 'foot' ? player : null),
-    getTarget: () => approach?.vehicle ?? pendingEnter?.vehicle ?? null,
+    getTarget: () => approach?.vehicle ?? null,
   });
 
   const speedEl = document.getElementById('speed');
@@ -214,38 +219,32 @@ export function createGame(canvas) {
     return best;
   }
 
-  // A spot beside the vehicle, always outside its collider box.
-  // side -1 is the driver's side (local -X), 1 is the passenger side.
+  // A spot beside the vehicle, outside the body. side -1 and 1 are the two flanks.
   function sideSpot(vehicle, side) {
     const h = vehicle.heading;
-    const lateral = vehicle.sideExtent() + player.radius + 0.35;
+    const lateral = vehicle.width / 2 + player.radius + 0.32;
     return {
+      side,
       x: vehicle.x + side * Math.cos(h) * lateral,
       z: vehicle.z - side * Math.sin(h) * lateral,
     };
   }
 
-  // Where the character walks to before getting in: the driver's door when it
-  // is reachable, otherwise the other side, otherwise behind the vehicle.
-  function approachSpot(vehicle) {
-    const spec = vehicle.doorSpec();
-    const forward = spec ? spec.z : 0;
-    const spots = [-1, 1].map((side) => {
-      const spot = sideSpot(vehicle, side);
-      const h = vehicle.heading;
-      return {
-        x: spot.x + Math.sin(h) * forward,
-        z: spot.z + Math.cos(h) * forward,
-      };
-    });
-    spots.push({
-      x: vehicle.x - Math.sin(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
-      z: vehicle.z - Math.cos(vehicle.heading) * (vehicle.sideExtent() + player.radius + 0.35),
-    });
-    for (const spot of spots) {
-      if (!blocked(spot.x, spot.z, player.radius, world.colliders)) return spot;
+  // The nearer flank that is not inside a wall. prefer keeps the walk from
+  // flipping sides when both are almost the same distance.
+  function approachSpot(vehicle, prefer) {
+    const spots = [sideSpot(vehicle, -1), sideSpot(vehicle, 1)];
+    const open = spots.filter((spot) => !blocked(spot.x, spot.z, player.radius, world.colliders));
+    const pool = open.length > 0 ? open : spots;
+    const dist = (spot) => Math.hypot(spot.x - player.x, spot.z - player.z);
+    if (prefer === -1 || prefer === 1) {
+      const kept = pool.find((spot) => spot.side === prefer);
+      const other = pool.find((spot) => spot.side !== prefer);
+      if (kept && (!other || dist(kept) <= dist(other) + 0.8)) return kept;
+      if (other) return other;
     }
-    return spots[0];
+    pool.sort((a, b) => dist(a) - dist(b));
+    return pool[0];
   }
 
   function addVehicleCollider(vehicle) {
@@ -266,7 +265,6 @@ export function createGame(canvas) {
       previous.inUse = false;
       previous.speed = 0;
       previous.braking = false;
-      previous.closeDoor();
       addVehicleCollider(previous);
     }
     removeVehicleCollider(next);
@@ -367,12 +365,15 @@ export function createGame(canvas) {
     mode = 'foot';
     view = 'follow';
     approach = null;
-    pendingEnter = null;
-    pendingExit = null;
     player.jumpY = 0;
     player.jumpV = 0;
     player.airborne = false;
     player.attack = 0;
+    player.down = 0;
+    player.dead = false;
+    player.bleed = 0;
+    setPose(player, 'stand');
+    blood.reset();
     removeCheatVehicles();
     // A car taken from traffic is not in vehicleHome; leave it parked where it
     // was instead of keeping it marked as driven with no collider.
@@ -382,12 +383,10 @@ export function createGame(canvas) {
       hero.inUse = false;
       hero.speed = 0;
       hero.braking = false;
-      hero.closeDoor();
       addVehicleCollider(hero);
     }
     for (const home of vehicleHome) {
       home.vehicle.inUse = false;
-      home.vehicle.closeDoor();
     }
     hero = vehicleHome.find((home) => home.driveable)?.vehicle ?? hero;
     placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
@@ -412,6 +411,9 @@ export function createGame(canvas) {
       ped.index = 0;
       ped.dir = 1;
       ped.stun = 0;
+      ped.down = 0;
+      ped.dead = false;
+      ped.bleed = 0;
       placeOnFoot(ped, home.x, home.z, home.heading);
       setPose(ped, 'stand');
     });
@@ -443,16 +445,279 @@ export function createGame(canvas) {
     if (view === 'follow') input.lock();
   }
 
-  function carHits(vehicle, x, z, cols) {
-  const fx = Math.sin(vehicle.heading);
-  const fz = Math.cos(vehicle.heading);
-  const offset = Math.max(0.2, vehicle.length / 2 - vehicle.width / 2);
-  const radius = vehicle.width / 2 + 0.22;
-  return blocked(x + fx * offset, z + fz * offset, radius, cols)
-    || blocked(x - fx * offset, z - fz * offset, radius, cols);
-}
+  function carHits(vehicle, x, z) {
+    return vehicleBlocked(
+      x,
+      z,
+      vehicle.heading,
+      vehicle.length,
+      vehicle.width,
+      world.colliders,
+      null,
+    );
+  }
 
-function collidersFor(includeHero, ignore) {
+  // A car that has already overlapped someone keeps them inside, because
+  // moveCircle refuses every step that is still blocked. Push them out to the
+  // nearest edge, unless that edge is a wall.
+  function separatePeople() {
+    staticCols.length = 0;
+    for (let i = 0; i < world.colliders.length; i++) {
+      const box = world.colliders[i];
+      if (!box.obb) staticCols.push(box);
+    }
+    const ignore = mode === 'foot' ? (approach?.vehicle ?? null) : null;
+    if (mode === 'foot') separateBody(player, player.radius, ignore);
+    for (let i = 0; i < peds.length; i++) separateBody(peds[i], peds[i].radius, null);
+    const slots = crowd.positions();
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      if (!separateBody(slot, slot.radius || 0.36, null) || !slot.actor) continue;
+      slot.actor.x = slot.x;
+      slot.actor.z = slot.z;
+      slot.actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
+    }
+  }
+
+  function separateBody(body, radius, ignore) {
+    let x = body.x;
+    let z = body.z;
+    let changed = false;
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (let i = 0; i < world.vehicles.length; i++) {
+        const vehicle = world.vehicles[i];
+        if (vehicle === ignore || vehicle.group.visible === false) continue;
+        if (Math.abs(vehicle.speed || 0) >= KNOCK_SPEED) continue;
+        const exits = circleExitsFromObb(
+          x,
+          z,
+          radius,
+          vehicle.x,
+          vehicle.z,
+          vehicle.heading,
+          vehicle.length / 2,
+          vehicle.width / 2,
+        );
+        if (!exits) continue;
+        let freed = null;
+        for (let edge = 0; edge < exits.length; edge += 1) {
+          const candidate = exits[edge];
+          if (!blocked(candidate.x, candidate.z, radius, staticCols)) {
+            freed = candidate;
+            break;
+          }
+        }
+        if (!freed) continue;
+        x = freed.x;
+        z = freed.z;
+        changed = true;
+      }
+    }
+    if (!changed) return false;
+    body.x = x;
+    body.z = z;
+    if (body.group) {
+      body.group.position.set(
+        x,
+        WALK_TOP + world.ground(x, z) + (body.jumpY || 0),
+        z,
+      );
+    }
+    return true;
+  }
+
+  function eachPerson() {
+    const list = [];
+    if (mode === 'foot') list.push({ body: player, actor: player, radius: player.radius });
+    for (let i = 0; i < peds.length; i++) {
+      list.push({ body: peds[i], actor: peds[i], radius: peds[i].radius });
+    }
+    const slots = crowd.positions();
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      if (!slot.actor) continue;
+      list.push({ body: slot, actor: slot.actor, radius: slot.radius || 0.36 });
+    }
+    return list;
+  }
+
+  function syncPerson(body, actor) {
+    actor.x = body.x;
+    actor.z = body.z;
+    actor.heading = body.heading;
+    actor.group.position.set(
+      body.x,
+      WALK_TOP + world.ground(body.x, body.z) + (body.jumpY || 0),
+      body.z,
+    );
+    actor.group.rotation.y = body.heading;
+  }
+
+  function respawnPlayer() {
+    player.dead = false;
+    player.down = 0;
+    player.bleed = 0;
+    player.airborne = false;
+    player.jumpY = 0;
+    player.jumpV = 0;
+    approach = null;
+    setPose(player, 'stand');
+    placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
+    flash = { text: t('wasted'), timer: 2.4 };
+  }
+
+  // The car keeps going. A hard hit kills; a slow shove only knocks them flat.
+  function crushPeople(dt) {
+    staticCols.length = 0;
+    for (let i = 0; i < world.colliders.length; i += 1) {
+      if (!world.colliders[i].obb) staticCols.push(world.colliders[i]);
+    }
+    const people = eachPerson();
+    for (let v = 0; v < world.vehicles.length; v += 1) {
+      const vehicle = world.vehicles[v];
+      if (vehicle.group.visible === false) continue;
+      const speed = Math.abs(vehicle.speed || 0);
+      if (speed < KNOCK_SPEED) continue;
+      const dir = Math.sign(vehicle.speed) || 1;
+      const fx = Math.sin(vehicle.heading) * dir;
+      const fz = Math.cos(vehicle.heading) * dir;
+      const halfL = vehicle.length / 2;
+      const halfW = vehicle.width / 2;
+      const fatal = speed >= KILL_SPEED;
+      let slowed = false;
+      for (let p = 0; p < people.length; p += 1) {
+        const { body, actor, radius } = people[p];
+        if (!obbHitsCircle(vehicle.x, vehicle.z, vehicle.heading, halfL, halfW, body.x, body.z, radius)) {
+          continue;
+        }
+        if (body === player) {
+          body.jumpY = 0;
+          body.jumpV = 0;
+          body.airborne = false;
+        }
+        const shove = Math.min(speed, 12) * dt * 0.95;
+        const next = moveCircle(body.x, body.z, fx * shove, fz * shove, radius, staticCols);
+        body.x = next.x;
+        body.z = next.z;
+        body.heading = Math.atan2(fx, fz);
+        const y = world.ground(body.x, body.z);
+        if (body.dead) {
+          if ((body.bleed || 0) <= 0) {
+            blood.spill(body.x, body.z, y, true);
+            body.bleed = 0.45;
+          }
+        } else if (fatal || !(body.down > 0)) {
+          if (fatal) {
+            body.dead = true;
+            body.down = body === player ? 3.6 : 1;
+          } else {
+            body.down = 6.5;
+            body.dead = false;
+          }
+          if (actor.pose !== 'down') setPose(actor, 'down');
+          if (body.chatPartner) {
+            const partner = body.chatPartner;
+            body.chatPartner = null;
+            body.idle = 0;
+            if (partner.chatPartner === body) partner.chatPartner = null;
+          }
+          blood.spill(body.x, body.z, y, fatal);
+          body.bleed = fatal ? 0.3 : 0.65;
+          if (!slowed) {
+            vehicle.speed *= fatal ? 0.93 : 0.78;
+            slowed = true;
+          }
+          if (body === player) approach = null;
+        }
+        syncPerson(body, actor);
+      }
+    }
+  }
+
+  function unclipPeople() {
+    const people = eachPerson();
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let i = 0; i < people.length; i += 1) {
+        for (let j = i + 1; j < people.length; j += 1) {
+          const a = people[i];
+          const b = people[j];
+          let dx = b.body.x - a.body.x;
+          let dz = b.body.z - a.body.z;
+          const min = a.radius + b.radius;
+          let dist = Math.hypot(dx, dz);
+          if (dist >= min) continue;
+          if (dist < 0.0001) {
+            dx = 1;
+            dz = 0;
+            dist = 1;
+          }
+          const push = (min - dist) / 2;
+          const nx = dx / dist;
+          const nz = dz / dist;
+          const ax = a.body.x - nx * push;
+          const az = a.body.z - nz * push;
+          const bx = b.body.x + nx * push;
+          const bz = b.body.z + nz * push;
+          if (!blocked(ax, az, a.radius, staticCols)) {
+            a.body.x = ax;
+            a.body.z = az;
+          }
+          if (!blocked(bx, bz, b.radius, staticCols)) {
+            b.body.x = bx;
+            b.body.z = bz;
+          }
+        }
+      }
+    }
+    for (let i = 0; i < people.length; i += 1) syncPerson(people[i].body, people[i].actor);
+  }
+
+  function tickBodies(dt) {
+    const people = eachPerson();
+    for (let i = 0; i < people.length; i += 1) {
+      const { body, actor } = people[i];
+      if (!body.dead && !(body.down > 0)) continue;
+      if (body.bleed > 0) body.bleed -= dt;
+      else {
+        blood.drip(body.x, body.z, world.ground(body.x, body.z));
+        body.bleed = body.dead ? 0.42 : 0.85;
+      }
+      if (body.dead) {
+        if (body === player) {
+          body.down -= dt;
+          if (body.down <= 0) respawnPlayer();
+        }
+        continue;
+      }
+      body.down -= dt;
+      if (body.down <= 0) {
+        body.down = 0;
+        body.bleed = 0;
+        setPose(actor, 'stand');
+      }
+    }
+  }
+
+  function personHit(person) {
+    let hit = person.hit;
+    if (!hit) {
+      hit = { circle: true, x: 0, z: 0, radius: 0.36 };
+      person.hit = hit;
+    }
+    hit.x = person.x;
+    hit.z = person.z;
+    hit.radius = person.radius || 0.36;
+    return hit;
+  }
+
+  function neighborBodies() {
+    scratch.length = 0;
+    if (mode === 'foot') scratch.push(player);
+    for (let i = 0; i < peds.length; i++) scratch.push(peds[i]);
+    return scratch;
+  }
+
+  function collidersFor(includeHero, ignore, ignorePerson) {
     scratch.length = 0;
     for (const c of world.colliders) {
       if (ignore && c === ignore._aabb) continue;
@@ -460,6 +725,14 @@ function collidersFor(includeHero, ignore) {
     }
     if (includeHero && hero && hero !== ignore && !scratch.includes(hero.collider())) {
       scratch.push(hero.collider());
+    }
+    if (mode === 'foot' && player !== ignorePerson) scratch.push(personHit(player));
+    for (let i = 0; i < peds.length; i++) {
+      if (peds[i] !== ignorePerson) scratch.push(personHit(peds[i]));
+    }
+    const slots = crowd.positions();
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] !== ignorePerson) scratch.push(personHit(slots[i]));
     }
     return scratch;
   }
@@ -478,15 +751,10 @@ function collidersFor(includeHero, ignore) {
     input.release();
   }
 
-  // Opens the door and waits until it has swung before the character sits down.
   function beginEnter(vehicle) {
     approach = null;
-    vehicle.openDoor();
-    pendingEnter = { vehicle, phase: 'open', hold: 0.35 };
-  }
-
-  function doorReady(vehicle) {
-    return !vehicle.door || vehicle.door.open >= 0.82;
+    activateHero(vehicle);
+    enterCar();
   }
 
   function exitCar() {
@@ -521,8 +789,6 @@ function collidersFor(includeHero, ignore) {
     setPose(player, 'stand');
     vehicle.speed = 0;
     vehicle.braking = false;
-    vehicle.openDoor();
-    pendingExit = { vehicle, timer: 0.7 };
     // The parked car becomes solid again once the character is out.
     addVehicleCollider(vehicle);
     vehicle.inUse = false;
@@ -592,7 +858,7 @@ function collidersFor(includeHero, ignore) {
       player.heading += delta * (1 - Math.pow(0.0008, dt));
       player.group.rotation.y = player.heading;
     }
-    const step = moveCircle(player.x, player.z, ix * speed * dt, iz * speed * dt, player.radius, collidersFor(true));
+    const step = moveCircle(player.x, player.z, ix * speed * dt, iz * speed * dt, player.radius, collidersFor(true, null, player));
     player.x = step.x;
     player.z = step.z;
     player.group.position.set(
@@ -603,15 +869,14 @@ function collidersFor(includeHero, ignore) {
     animateActor(player, speed, time, dt);
   }
 
-  // Walks the character to the door of the picked vehicle. A car taken from
-  // traffic is still moving at first, so its door spot is refreshed each frame.
+  // Walks to the nearer side of the vehicle. The body stays solid, so the
+  // character goes around it instead of through it.
   function updateApproach(dt, time) {
     const target = approach;
-    if (target.vehicle.traffic) {
-      const spot = approachSpot(target.vehicle);
-      target.x = spot.x;
-      target.z = spot.z;
-    }
+    const spot = approachSpot(target.vehicle, target.side);
+    target.side = spot.side;
+    target.x = spot.x;
+    target.z = spot.z;
     const dx = target.x - player.x;
     const dz = target.z - player.z;
     const dist = Math.hypot(dx, dz);
@@ -626,7 +891,7 @@ function collidersFor(includeHero, ignore) {
       (dx / dist) * speed * dt,
       (dz / dist) * speed * dt,
       player.radius,
-      collidersFor(true, target.vehicle),
+      collidersFor(true, null, player),
     );
     player.x = step.x;
     player.z = step.z;
@@ -642,12 +907,11 @@ function collidersFor(includeHero, ignore) {
   }
 
   function updateFoot(dt, time) {
-    if (pendingExit) {
-      pendingExit.timer -= dt;
-      if (pendingExit.timer <= 0) {
-        pendingExit.vehicle.closeDoor();
-        pendingExit = null;
-      }
+    if (player.dead || player.down > 0) {
+      input.consume('attack');
+      input.consume('interact');
+      approach = null;
+      return;
     }
     updateJump(dt);
     if (player.attack > 0) player.attack = Math.max(0, player.attack - dt);
@@ -672,7 +936,11 @@ function collidersFor(includeHero, ignore) {
         const target = findEnterableVehicle(player.x, player.z);
         if (target) {
           const spot = approachSpot(target);
-          approach = { vehicle: target, x: spot.x, z: spot.z, timer: 0 };
+          if (Math.hypot(spot.x - player.x, spot.z - player.z) < 0.7) {
+            beginEnter(target);
+          } else {
+            approach = { vehicle: target, x: spot.x, z: spot.z, side: spot.side, timer: 0 };
+          }
           input.release();
         } else {
           flash = { text: t('noVehicle'), timer: 1.6 };
@@ -704,13 +972,13 @@ function collidersFor(includeHero, ignore) {
 
     const vx = Math.sin(hero.heading) * hero.speed;
     const vz = Math.cos(hero.heading) * hero.speed;
-    const cols = world.colliders;
     const nx = hero.x + vx * dt;
-    if (!carHits(hero, nx, hero.z, cols)) hero.x = nx;
+    if (!carHits(hero, nx, hero.z)) hero.x = nx;
     else hero.speed *= -0.22;
     const nz = hero.z + vz * dt;
-    if (!carHits(hero, hero.x, nz, cols)) hero.z = nz;
+    if (!carHits(hero, hero.x, nz)) hero.z = nz;
     else hero.speed *= -0.22;
+    hero.collider();
 
     const ahead = 3;
     hero.y = world.ground(hero.x, hero.z);
@@ -745,6 +1013,11 @@ function collidersFor(includeHero, ignore) {
 
   function updatePeds(dt, time) {
     for (const ped of peds) {
+      if (ped.dead || ped.down > 0) {
+        ped.group.position.set(ped.x, WALK_TOP + world.ground(ped.x, ped.z), ped.z);
+        ped.group.rotation.y = ped.heading;
+        continue;
+      }
       if (ped.stun > 0) {
         ped.stun -= dt;
         const run = 4.2;
@@ -754,7 +1027,7 @@ function collidersFor(includeHero, ignore) {
           ped.stunX * run * dt,
           ped.stunZ * run * dt,
           ped.radius,
-          collidersFor(true),
+          collidersFor(true, null, ped),
         );
         ped.x = next.x;
         ped.z = next.z;
@@ -777,7 +1050,7 @@ function collidersFor(includeHero, ignore) {
           (ax / len) * run * dt,
           (az / len) * run * dt,
           ped.radius,
-          collidersFor(true),
+          collidersFor(true, null, ped),
         );
         ped.x = next.x;
         ped.z = next.z;
@@ -808,7 +1081,7 @@ function collidersFor(includeHero, ignore) {
       const step = ped.speed * dt;
       const mx = (dx / dist) * step;
       const mz = (dz / dist) * step;
-      const next = moveCircle(ped.x, ped.z, mx, mz, ped.radius, collidersFor(true));
+      const next = moveCircle(ped.x, ped.z, mx, mz, ped.radius, collidersFor(true, null, ped));
       if (Math.hypot(next.x - ped.x, next.z - ped.z) < step * 0.25) ped.dir *= -1;
       ped.x = next.x;
       ped.z = next.z;
@@ -923,7 +1196,7 @@ function collidersFor(includeHero, ignore) {
     if (mode === 'drive') {
       setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
       setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
-      const canExit = Math.abs(hero.speed) < 2.5 && !pendingEnter;
+      const canExit = Math.abs(hero.speed) < 2.5;
       setPrompt(canExit, keys.interact, t('exitCar'));
       return;
     }
@@ -941,7 +1214,7 @@ function collidersFor(includeHero, ignore) {
       return;
     }
 
-    if (approach || pendingEnter) {
+    if (approach) {
       setPrompt(true, '', t('approachCar'), true);
       return;
     }
@@ -1081,24 +1354,6 @@ function collidersFor(includeHero, ignore) {
       yaw = Math.PI + Math.sin(elapsed * 0.28) * 0.42;
       pitch = 0.34;
       animateActor(player, 0, elapsed, dt);
-    } else if (pendingEnter) {
-      input.consume('attack');
-      input.consume('interact');
-      const vehicle = pendingEnter.vehicle;
-      if (pendingEnter.phase === 'open') {
-        if (doorReady(vehicle)) {
-          activateHero(vehicle);
-          enterCar();
-          pendingEnter.phase = 'hold';
-        }
-      } else {
-        pendingEnter.hold -= dt;
-        if (pendingEnter.hold <= 0) {
-          vehicle.closeDoor();
-          pendingEnter = null;
-        }
-      }
-      if (mode === 'drive' && pendingEnter?.phase === 'hold') updateDrive(dt);
     } else if (mode === 'foot') {
       updateFoot(dt, elapsed);
     } else {
@@ -1112,6 +1367,11 @@ function collidersFor(includeHero, ignore) {
     traffic.update(dt);
     for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     crowd.update(dt, elapsed);
+    crushPeople(dt);
+    unclipPeople();
+    tickBodies(dt);
+    separatePeople();
+    blood.update(dt);
     updateHud();
     const focus = mode === 'drive' ? hero : player;
     const range = mode === 'drive'

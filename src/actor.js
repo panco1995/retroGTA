@@ -254,6 +254,8 @@ export function createActor(opts = {}) {
 export function setPose(actor, pose) {
   actor.pose = pose;
   const p = actor.parts;
+  actor.visual.rotation.x = 0;
+  actor.visual.position.y = 0;
   if (pose === 'sit') {
     actor.hips.position.y = 0.56;
     p.leftLeg.rotation.set(-1.35, 0, 0.06);
@@ -261,7 +263,15 @@ export function setPose(actor, pose) {
     p.leftArm.rotation.set(-0.5, 0, 0.18);
     p.rightArm.rotation.set(-0.25, 0, -0.18);
     p.torso.rotation.set(0.08, 0, 0);
-    actor.visual.position.y = 0;
+  } else if (pose === 'down') {
+    actor.visual.rotation.x = -Math.PI / 2;
+    actor.visual.position.y = 0.34;
+    actor.hips.position.y = 0.9;
+    p.leftLeg.rotation.set(0.25, 0.08, 0.4);
+    p.rightLeg.rotation.set(-0.4, -0.06, -0.28);
+    p.leftArm.rotation.set(0.7, 0, 1.2);
+    p.rightArm.rotation.set(-0.9, 0, -1.35);
+    p.torso.rotation.set(0, 0.25, 0.18);
   } else {
     actor.hips.position.y = 0.9;
     p.leftLeg.rotation.set(0, 0, 0);
@@ -280,7 +290,7 @@ function damp(current, target, dt) {
 }
 
 export function animateActor(actor, speed, time, dt) {
-  if (actor.pose === 'sit') return;
+  if (actor.pose === 'sit' || actor.pose === 'down') return;
   const p = actor.parts;
 
   if (actor.airborne) {

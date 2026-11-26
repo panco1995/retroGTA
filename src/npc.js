@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { WALK_TOP, colorOf } from './config.js';
-import { animateActor, createActor } from './actor.js';
+import { animateActor, createActor, setPose } from './actor.js';
 import { blocked, moveCircle } from './collision.js';
 
 // The crowd streams around the player: a slot only spawns on a sidewalk that
@@ -373,7 +373,9 @@ function buildWalkGraph(segments) {
   return { nodes, edges };
 }
 
-export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid }) {
+export function createPedestrianCrowd({
+  scene, world, camera, getFocus, avoid, getExtraColliders, getNeighbors,
+}) {
   const { nodes, edges } = buildWalkGraph(world.walkways);
   const active = [];
   const slots = [];
@@ -399,6 +401,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       dodgeZ: 0,
       idle: 0,
       idleKind: 'look',
+      radius: NPC_RADIUS,
       facing: null,
       chatPartner: null,
       chatCooldown: rnd(4, 14),
@@ -550,6 +553,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       if (other === slot) continue;
       if (other.speed > 2.2) continue;
       if (other.idle > 0 || other.panic > 0 || other.chatPartner) continue;
+      if (other.dead || other.down > 0) continue;
       if (other.crossing || slot.crossing) continue;
       const dx = other.x - slot.x;
       const dz = other.z - slot.z;
@@ -602,6 +606,42 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     return false;
   }
 
+  const solidBuf = [];
+
+  // The driven car is taken out of world.colliders so it does not hit itself.
+  // Pedestrians still have to walk around it.
+  function stampPerson(person) {
+    let hit = person.hit;
+    if (!hit) {
+      hit = { circle: true, x: 0, z: 0, radius: NPC_RADIUS };
+      person.hit = hit;
+    }
+    hit.x = person.x;
+    hit.z = person.z;
+    hit.radius = person.radius || NPC_RADIUS;
+    return hit;
+  }
+
+  function solidColliders(self) {
+    solidBuf.length = 0;
+    for (let i = 0; i < world.colliders.length; i++) solidBuf.push(world.colliders[i]);
+    const extra = getExtraColliders ? getExtraColliders() : null;
+    if (extra) {
+      for (let i = 0; i < extra.length; i++) {
+        if (!solidBuf.includes(extra[i])) solidBuf.push(extra[i]);
+      }
+    }
+    for (let i = 0; i < active.length; i++) {
+      const other = active[i];
+      if (other !== self) solidBuf.push(stampPerson(other));
+    }
+    const neighbors = getNeighbors ? getNeighbors() : null;
+    if (neighbors) {
+      for (let i = 0; i < neighbors.length; i++) solidBuf.push(stampPerson(neighbors[i]));
+    }
+    return solidBuf;
+  }
+
   function findSpot(focus) {
     const segments = world.walkways;
     if (!segments || segments.length === 0) return null;
@@ -612,7 +652,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       const z = seg.z0 + (seg.z1 - seg.z0) * t;
       const dist = Math.hypot(x - focus.x, z - focus.z);
       if (dist < SPAWN_MIN || dist > SPAWN_MAX) continue;
-      if (blocked(x, z, NPC_RADIUS + 0.12, world.colliders)) continue;
+      if (blocked(x, z, NPC_RADIUS + 0.12, solidColliders())) continue;
       if (tooClose(x, z)) continue;
       if (visibleAt(x, z)) continue;
       return { x, z, seg, t };
@@ -684,6 +724,9 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     slot.mayWait = false;
     slot.crossWait = 0;
     slot.panic = 0;
+    slot.down = 0;
+    slot.dead = false;
+    slot.bleed = 0;
     slot.idle = 0;
     slot.idleKind = 'look';
     slot.facing = null;
@@ -697,6 +740,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     actor.group.visible = true;
     actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
     actor.group.rotation.y = slot.heading;
+    if (actor.pose === 'down') setPose(actor, 'stand');
     active.push(slot);
     return true;
   }
@@ -730,6 +774,10 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
 
   function step(slot, dt, time) {
     const actor = slot.actor;
+    if (slot.dead || slot.down > 0) {
+      placeActor(slot, actor, 0, dt, time);
+      return;
+    }
 
     // A car coming straight at someone on the pavement: run clear.
     if (!slot.crossing) {
@@ -754,7 +802,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
         slot.dodgeX * PANIC_SPEED * dt,
         slot.dodgeZ * PANIC_SPEED * dt,
         NPC_RADIUS,
-        world.colliders,
+        solidColliders(slot),
       );
       const moved = Math.hypot(next.x - slot.x, next.z - slot.z);
       slot.x = next.x;
@@ -835,7 +883,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     } else {
       const stepX = (dx / dist) * move;
       const stepZ = (dz / dist) * move;
-      const next = moveCircle(slot.x, slot.z, stepX, stepZ, NPC_RADIUS, world.colliders);
+      const next = moveCircle(slot.x, slot.z, stepX, stepZ, NPC_RADIUS, solidColliders(slot));
       const moved = Math.hypot(next.x - slot.x, next.z - slot.z);
       if (moved < move * 0.3) {
         slot.stuck += dt;
@@ -887,9 +935,15 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       slot.active = false;
       slot.idle = 0;
       slot.panic = 0;
+      slot.down = 0;
+      slot.dead = false;
+      slot.bleed = 0;
       slot.mayWait = false;
       slot.crossWait = 0;
-      if (slot.actor) slot.actor.group.visible = false;
+      if (slot.actor) {
+        if (slot.actor.pose === 'down') setPose(slot.actor, 'stand');
+        slot.actor.group.visible = false;
+      }
     }
     active.length = 0;
   }
@@ -903,6 +957,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       const dx = slot.x - x;
       const dz = slot.z - z;
       const dist = Math.hypot(dx, dz);
+      if (slot.dead || slot.down > 0) continue;
       if (dist > range) continue;
       if (dist > 0.01 && (dx * fx + dz * fz) / dist < 0.2) continue;
       slot.idle = 0;

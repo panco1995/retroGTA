@@ -15,11 +15,11 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 
 ## Features
 
-- Walk, run, jump, throw a punch, enter and exit vehicles, drive, and brake
+- Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake
 - Three cameras: follow, top-down, and 2.5D
-- Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles
-- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, stop for pedestrians and the player, and can be carjacked
-- Building collision; people and cars follow the ground height; movement stays on walkable ground
+- Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
+- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield
+- Building and vehicle-body collision. A stopped car is solid. A slow shove knocks someone down and they bleed; road speed runs them over and leaves more blood. People and cars follow the ground height and stay on walkable ground
 - GTA-style radar minimap, plus a full-island map in the pause menu
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Settings, About) with rebindable keys saved in the browser
@@ -57,7 +57,7 @@ Rebind keys in Settings (main menu) or Controls (pause menu): click a binding, t
 | Shift | Run | — |
 | Mouse | Turn the follow camera | Turn the follow camera |
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
-| E | Walk to the nearest door, open it, and get in | Exit when moving slowly |
+| E | Walk to the nearer side and get in | Exit when moving slowly |
 | Space | Jump | Brake |
 | Left click | Punch | — |
 | Esc | Pause: map, controls, language, cheats, restart, or exit | Pause: map, controls, language, cheats, restart, or exit |
@@ -109,7 +109,7 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 | `pickup` | Pickup | Separate cab and open cargo bed |
 | `sports` | Sports car | Low body, fastback glass, rear wing |
 | `van` | Van | Tall enclosed cargo body |
-| `bus` | City bus | 10.6 m body, long side windows, two doors |
+| `bus` | City bus | 10.6 m body, long side windows |
 | `truck` | Box truck | Cab-over cab, large cargo box, dual rear wheels |
 | `excavator` | Excavator | Tracks, boom, arm, and bucket |
 | `tractor` | Tractor | Large rear wheels, small front wheels, roll bar, exhaust stack |
@@ -141,11 +141,11 @@ The crowd draws from the kinds in `src/npc.js`. Hand-placed pedestrians in the m
 
 Weights in `KINDS` decide how often a kind appears; each spawn also rolls height, build, skin, hair, and clothing colors. To add a kind, append an entry to `KINDS` with a `weight` and a `make()` that returns the actor options (see the existing entries for the fields).
 
-The crowd reacts to traffic: people wait at the curb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the sidewalk. A punch sends nearby people running. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them.
+The crowd reacts to traffic: people wait at the curb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the sidewalk. A hit they do not dodge knocks them down when the car is slow: they lie bleeding, then get back up. At road speed the same hit kills them, and the body keeps bleeding. A stopped car does not run anyone over. The player, the hand-placed pedestrians, and the crowd block each other. A punch sends nearby people running. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them, and bleed the same way if it hits them. If the player is run over, they reappear at the safehouse.
 
 ## Traffic
 
-`src/city.js` derives a clockwise lane loop around each city block whose four sides are unbroken roads. Cars drive the right-hand lane of each loop, so neighboring blocks give two-way traffic. They slow for corners, follow moving cars and the player's car, and stop for pedestrians or for the player standing in the road. Cars spawn and despawn only outside the camera, like the pedestrian crowd. Ambient cars can be carjacked: target one with E and it stops while you walk to the door. Once taken, it becomes a normal car and can be parked or driven like any other.
+`src/city.js` derives a clockwise lane loop around each city block whose four sides are unbroken roads. Cars drive the right-hand lane of each loop, so neighboring blocks give two-way traffic. They slow for corners and follow moving cars and the player's car, but they do not stop for people: driving through someone knocks them down or kills them. Cars spawn and despawn only outside the camera, like the pedestrian crowd. Ambient cars can be carjacked: target one with E and it stops while you walk to the nearer side. Once taken, it becomes a normal car and can be parked or driven like any other.
 
 ## Project layout
 
@@ -156,11 +156,12 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Builds roads, buildings, the elevated track, colliders, and the lane/sidewalk networks |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
-| `src/actor.js` | Low-poly person model, walk cycle, and seated pose |
+| `src/actor.js` | Low-poly person model, walk cycle, seated pose, and the knocked-down pose |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, doors, and the 15 builders |
-| `src/collision.js` | Circle collision on the ground, plus the walkable island and bridge |
+| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders |
+| `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
+| `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
 | `src/i18n.js` | English and Chinese interface strings |
 | `src/bindings.js` | Key bindings, saved in the browser |

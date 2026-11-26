@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { colorOf } from './config.js';
 import { createVehicle } from './vehicle.js';
-import { blocked } from './collision.js';
+import { blocked, obbHitsObb } from './collision.js';
 
 // Ambient cars circle the city blocks on the same lane network the city
 // builds. Like the pedestrian crowd, they only spawn and despawn off camera.
@@ -66,7 +66,7 @@ function headingAt(loop, distance, ahead = 2.2) {
 }
 
 export function createTraffic({
-  scene, world, camera, getFocus, getPedestrians, getFoot, getTarget,
+  scene, world, camera, getFocus, getTarget,
 }) {
   const loops = world.trafficLoops ?? [];
   const slots = [];
@@ -209,31 +209,9 @@ export function createTraffic({
     if (index >= 0) active.splice(index, 1);
   }
 
-  function obstacleAhead(vehicle, pedestrians, foot) {
+  function obstacleAhead(vehicle) {
     const fx = Math.sin(vehicle.heading);
     const fz = Math.cos(vehicle.heading);
-
-    if (pedestrians) {
-      for (const ped of pedestrians) {
-        const dx = ped.x - vehicle.x;
-        const dz = ped.z - vehicle.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist < 2.6) return true;
-        const along = dx * fx + dz * fz;
-        if (along <= 0.5 || along > 8) continue;
-        if (Math.abs(dx * fz - dz * fx) > 1.8) continue;
-        return true;
-      }
-    }
-
-    if (foot) {
-      const dx = foot.x - vehicle.x;
-      const dz = foot.z - vehicle.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist < 2.8) return true;
-      const along = dx * fx + dz * fz;
-      if (along > 0.5 && along < 8 && Math.abs(dx * fz - dz * fx) < 2) return true;
-    }
 
     for (const other of world.vehicles) {
       if (other === vehicle) continue;
@@ -257,7 +235,22 @@ export function createTraffic({
     return false;
   }
 
-  function drive(slot, dt, pedestrians, foot, carjackTarget) {
+  function hitsVehicle(vehicle, x, z, heading) {
+    const halfL = vehicle.length / 2;
+    const halfW = vehicle.width / 2;
+    for (let i = 0; i < world.vehicles.length; i++) {
+      const other = world.vehicles[i];
+      if (other === vehicle || (!other.inUse && !other.traffic)) continue;
+      const box = other.collider();
+      if (obbHitsObb(
+        x, z, heading, halfL, halfW,
+        box.x, box.z, box.heading, box.halfL, box.halfW,
+      )) return true;
+    }
+    return false;
+  }
+
+  function drive(slot, dt, carjackTarget) {
     const vehicle = slot.vehicle;
     const loop = slot.loop;
     if (!vehicle || !loop) return;
@@ -266,16 +259,28 @@ export function createTraffic({
     let target = slot.cruise;
     if (Math.abs(turn) > 0.35) target = Math.min(target, 4.2);
     if (vehicle === carjackTarget) target = 0;
-    if (obstacleAhead(vehicle, pedestrians, foot)) target = 0;
+    if (obstacleAhead(vehicle)) target = 0;
 
     const diff = target - vehicle.speed;
     const rate = diff > 0 ? 5.5 : 11;
     vehicle.speed = Math.max(0, vehicle.speed + clamp(diff, -rate * dt, rate * dt));
     vehicle.braking = target === 0 && vehicle.speed > 0.15;
 
-    slot.s = (slot.s + vehicle.speed * dt) % loop.total;
-    const point = samplePoint(loop, slot.s);
-    const heading = headingAt(loop, slot.s);
+    const nextS = (slot.s + vehicle.speed * dt) % loop.total;
+    const point = samplePoint(loop, nextS);
+    const heading = headingAt(loop, nextS);
+    // The path is a rail, so stop before driving into another car.
+    // People are not a wall: a moving car runs them over.
+    const enteredCar = hitsVehicle(vehicle, point.x, point.z, heading)
+      && !hitsVehicle(vehicle, vehicle.x, vehicle.z, vehicle.heading);
+    if (enteredCar) {
+      vehicle.speed = Math.max(0, vehicle.speed - 14 * dt);
+      vehicle.braking = vehicle.speed > 0.15;
+      vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);
+      vehicle.collider();
+      return;
+    }
+    slot.s = nextS;
     vehicle.x = point.x;
     vehicle.z = point.z;
     vehicle.heading = heading;
@@ -308,10 +313,8 @@ export function createTraffic({
       }
     }
 
-    const pedestrians = getPedestrians ? getPedestrians() : null;
-    const foot = getFoot ? getFoot() : null;
     const carjackTarget = getTarget ? getTarget() : null;
-    for (const slot of active) drive(slot, dt, pedestrians, foot, carjackTarget);
+    for (const slot of active) drive(slot, dt, carjackTarget);
 
     let budget = SPAWNS_PER_FRAME;
     while (active.length < MAX_ACTIVE && budget > 0) {

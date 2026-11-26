@@ -622,8 +622,49 @@ function collidersFor(includeHero, ignore) {
     if (Math.abs(hero.speed) < 2.5 && input.consume('interact')) exitCar();
   }
 
+  // A moving car heading straight at this point, if any.
+  function threatAt(x, z) {
+    for (const vehicle of world.vehicles) {
+      const speed = Math.abs(vehicle.speed ?? 0);
+      if (speed < 3) continue;
+      const dx = x - vehicle.x;
+      const dz = z - vehicle.z;
+      if (Math.hypot(dx, dz) > 5.5) continue;
+      const dir = Math.sign(vehicle.speed) || 1;
+      const fx = Math.sin(vehicle.heading) * dir;
+      const fz = Math.cos(vehicle.heading) * dir;
+      if (dx * fx + dz * fz <= 0.1) continue;
+      if (Math.abs(dx * fz - dz * fx) > 2.8) continue;
+      return vehicle;
+    }
+    return null;
+  }
+
   function updatePeds(dt, time) {
     for (const ped of peds) {
+      const danger = threatAt(ped.x, ped.z);
+      if (danger) {
+        const ax = ped.x - danger.x;
+        const az = ped.z - danger.z;
+        const len = Math.hypot(ax, az) || 1;
+        const run = 4.2;
+        const next = moveCircle(
+          ped.x,
+          ped.z,
+          (ax / len) * run * dt,
+          (az / len) * run * dt,
+          ped.radius,
+          collidersFor(true),
+        );
+        ped.x = next.x;
+        ped.z = next.z;
+        ped.heading = Math.atan2(ax / len, az / len);
+        ped.group.position.set(ped.x, WALK_TOP + world.ground(ped.x, ped.z), ped.z);
+        ped.group.rotation.y = ped.heading;
+        animateActor(ped, run, time + ped.x, dt);
+        continue;
+      }
+
       const target = ped.path[ped.index];
       let dx = target.x - ped.x;
       let dz = target.z - ped.z;

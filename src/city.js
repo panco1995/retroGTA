@@ -570,10 +570,10 @@ const platW = Math.min(w * 0.34, 2.4);
         addCrosswalk(x, z, half);
         // Links between the four corners, so the crowd can cross a road.
         walkways.push(
-          { x0: x - o, z0: z - o, x1: x + o, z1: z - o },
-          { x0: x - o, z0: z + o, x1: x + o, z1: z + o },
-          { x0: x - o, z0: z - o, x1: x - o, z1: z + o },
-          { x0: x + o, z0: z - o, x1: x + o, z1: z + o },
+          { x0: x - o, z0: z - o, x1: x + o, z1: z - o, crossing: true },
+          { x0: x - o, z0: z + o, x1: x + o, z1: z + o, crossing: true },
+          { x0: x - o, z0: z - o, x1: x - o, z1: z + o, crossing: true },
+          { x0: x + o, z0: z - o, x1: x + o, z1: z + o, crossing: true },
         );
       }
     }

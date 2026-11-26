@@ -240,7 +240,7 @@ export function createActor(opts = {}) {
     group,
     visual,
     hips,
-    parts: { leftLeg, rightLeg, leftArm, rightArm, torso },
+    parts: { leftLeg, rightLeg, leftArm, rightArm, torso, head: headPivot },
     pose: 'stand',
     hunch,
     height: opts.height ?? 1,

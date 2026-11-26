@@ -139,6 +139,8 @@ The crowd picks its people from the kinds in `src/npc.js`. Hand-placed pedestria
 
 Weights in `KINDS` decide how often a kind appears; each spawn also rolls height, build, skin, hair, and clothing colors. To add a kind, append an entry to `KINDS` with a `weight` and a `make()` that returns the actor options (see the existing entries for the fields).
 
+The crowd reacts to traffic: people wait at the kerb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the pavement. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them.
+
 ## Layout
 
 | File | Role |

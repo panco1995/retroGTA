@@ -14,6 +14,13 @@ const SPAWN_TRIES = 24;
 const NODE_MERGE = 3;
 const NPC_RADIUS = 0.36;
 const MIN_SPACING = 2.4;
+// Traffic reactions: wait before stepping onto a road, hurry across, and
+// jump aside when a car heads straight for someone on the pavement.
+const CROSS_LOOK = 18;
+const CROSS_PATIENCE = 4;
+const PANIC_RANGE = 5.5;
+const PANIC_SPEED = 4.2;
+const TRAFFIC_SIDE = 2.8;
 
 const SKIN_TONES = [0xf1c9a5, 0xe4b58f, 0xd39c74, 0xbe8359, 0xa06b46, 0x825536, 0x633f27];
 const HAIR_TONES = [
@@ -359,7 +366,7 @@ function buildWalkGraph(segments) {
     const len = Math.hypot(nodes[b].x - nodes[a].x, nodes[b].z - nodes[a].z);
     if (len < 1.2) continue;
     const index = edges.length;
-    edges.push({ a, b, len });
+    edges.push({ a, b, len, crossing: !!seg.crossing });
     nodes[a].edges.push(index);
     nodes[b].edges.push(index);
   }
@@ -384,7 +391,17 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       heading: 0,
       target: -1,
       from: -1,
+      crossing: false,
+      mayWait: false,
+      crossWait: 0,
+      panic: 0,
+      dodgeX: 0,
+      dodgeZ: 0,
       idle: 0,
+      idleKind: 'look',
+      facing: null,
+      chatPartner: null,
+      chatCooldown: rnd(4, 14),
       stuck: 0,
       seed: Math.random() * 10,
     });
@@ -415,6 +432,150 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       }
     }
     return best;
+  }
+
+  // The closest moving vehicle that is heading for this point. Parked cars
+  // have speed 0, so only traffic on the move counts.
+  function trafficNear(x, z, range, minSpeed) {
+    let best = null;
+    let bestDist = range;
+    for (const vehicle of world.vehicles) {
+      const speed = Math.abs(vehicle.speed ?? 0);
+      if (speed < minSpeed) continue;
+      const dx = x - vehicle.x;
+      const dz = z - vehicle.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > bestDist) continue;
+      const dir = Math.sign(vehicle.speed) || 1;
+      const fx = Math.sin(vehicle.heading) * dir;
+      const fz = Math.cos(vehicle.heading) * dir;
+      if (dx * fx + dz * fz <= 0.1) continue;
+      if (Math.abs(dx * fz - dz * fx) > TRAFFIC_SIDE) continue;
+      best = vehicle;
+      bestDist = dist;
+    }
+    return best;
+  }
+
+  function nearestBuilding(x, z, range) {
+    let best = null;
+    let bestDist = range;
+    for (const building of world.buildings) {
+      const minX = building.x - building.w / 2;
+      const maxX = building.x + building.w / 2;
+      const minZ = building.z - building.d / 2;
+      const maxZ = building.z + building.d / 2;
+      const px = Math.min(Math.max(x, minX), maxX);
+      const pz = Math.min(Math.max(z, minZ), maxZ);
+      const dist = Math.hypot(x - px, z - pz);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { x: px, z: pz };
+      }
+    }
+    return best;
+  }
+
+  function turnToward(slot, want, dt) {
+    let delta = want - slot.heading;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    slot.heading += delta * Math.min(1, dt * 7);
+  }
+
+  function beginIdle(slot, seconds) {
+    slot.idle = seconds;
+    const hasRightHandBag = slot.opts.briefcase != null || slot.opts.handbag != null;
+    const roll = Math.random();
+    if (roll < 0.4 || (roll < 0.7 && hasRightHandBag)) {
+      slot.idleKind = 'look';
+      slot.facing = null;
+    } else if (roll < 0.7) {
+      slot.idleKind = 'phone';
+      slot.facing = null;
+    } else {
+      const spot = nearestBuilding(slot.x, slot.z, 10);
+      if (spot) {
+        slot.idleKind = 'shop';
+        slot.facing = Math.atan2(spot.x - slot.x, spot.z - slot.z);
+      } else {
+        slot.idleKind = 'look';
+        slot.facing = null;
+      }
+    }
+  }
+
+  function idleFrame(slot, dt, time) {
+    const actor = slot.actor;
+    const head = actor.parts.head;
+    animateActor(actor, 0, time + slot.seed, dt);
+
+    let yaw = 0;
+    let nod = 0;
+    if (slot.idleKind === 'look') {
+      yaw = Math.sin((time + slot.seed) * 1.4) * 0.75;
+    } else if (slot.idleKind === 'chat') {
+      yaw = Math.sin((time + slot.seed) * 2.2) * 0.08;
+      nod = Math.sin((time + slot.seed) * 2.6) * 0.08;
+    } else if (slot.idleKind === 'phone') {
+      nod = 0.28;
+      const arm = actor.parts.rightArm;
+      arm.rotation.x = -1.25;
+      arm.rotation.z += (-0.16 - arm.rotation.z) * Math.min(1, dt * 8);
+    } else {
+      actor.parts.rightArm.rotation.z += (0 - actor.parts.rightArm.rotation.z) * Math.min(1, dt * 8);
+    }
+    head.rotation.y += (yaw - head.rotation.y) * Math.min(1, dt * 6);
+    head.rotation.x += (nod - head.rotation.x) * Math.min(1, dt * 6);
+
+    if (slot.idleKind === 'chat' && slot.chatPartner) {
+      turnToward(slot, Math.atan2(
+        slot.chatPartner.x - slot.x,
+        slot.chatPartner.z - slot.z,
+      ), dt);
+    } else if (slot.idleKind === 'shop' && slot.facing != null) {
+      turnToward(slot, slot.facing, dt);
+    }
+
+    actor.x = slot.x;
+    actor.z = slot.z;
+    actor.heading = slot.heading;
+    actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
+    actor.group.rotation.y = slot.heading;
+  }
+
+  function findChatPartner(slot) {
+    if (slot.speed > 2.2) return null;
+    for (const other of active) {
+      if (other === slot) continue;
+      if (other.speed > 2.2) continue;
+      if (other.idle > 0 || other.panic > 0 || other.chatPartner) continue;
+      if (other.crossing || slot.crossing) continue;
+      const dx = other.x - slot.x;
+      const dz = other.z - slot.z;
+      if (dx * dx + dz * dz < 2.2 * 2.2) return other;
+    }
+    return null;
+  }
+
+  function startChat(a, b) {
+    const seconds = rnd(2.2, 3.6);
+    for (const [slot, partner] of [[a, b], [b, a]]) {
+      slot.chatPartner = partner;
+      slot.idle = seconds;
+      slot.idleKind = 'chat';
+      slot.mayWait = false;
+      slot.crossWait = 0;
+      slot.chatCooldown = rnd(20, 40);
+    }
+  }
+
+  function clearChat(slot) {
+    const partner = slot.chatPartner;
+    slot.chatPartner = null;
+    if (!partner || partner.chatPartner !== slot) return;
+    partner.chatPartner = null;
+    if (partner.idleKind === 'chat') partner.idle = 0;
   }
 
   // True when the point is inside the camera frustum. Spawning and despawning
@@ -461,7 +622,7 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
 
   function chooseNext(nodeIndex, previous) {
     const node = nodes[nodeIndex];
-    if (!node || node.edges.length === 0) return nodeIndex;
+    if (!node || node.edges.length === 0) return { node: nodeIndex, crossing: false };
 
     let inX = 0;
     let inZ = 0;
@@ -488,15 +649,15 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
       let weight = 1 + Math.max(0, inX * dx + inZ * dz) * 2.5;
       if (other === previous) weight *= 0.12;
       total += weight;
-      options.push({ node: other, weight });
+      options.push({ node: other, weight, crossing: edge.crossing });
     }
 
     let roll = Math.random() * total;
     for (const option of options) {
       roll -= option.weight;
-      if (roll <= 0) return option.node;
+      if (roll <= 0) return option;
     }
-    return options[options.length - 1].node;
+    return options[options.length - 1];
   }
 
   function spawn(slot, focus) {
@@ -513,12 +674,19 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     }
     if (target < 0) return false;
 
+    clearChat(slot);
     slot.x = spot.x;
     slot.z = spot.z;
     slot.speed = slot.opts.speed;
     slot.target = target;
     slot.from = from;
+    slot.crossing = !!spot.seg.crossing;
+    slot.mayWait = false;
+    slot.crossWait = 0;
+    slot.panic = 0;
     slot.idle = 0;
+    slot.idleKind = 'look';
+    slot.facing = null;
     slot.stuck = 0;
     slot.heading = Math.atan2(nodes[target].x - spot.x, nodes[target].z - spot.z);
     slot.active = true;
@@ -534,34 +702,136 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
   }
 
   function despawn(slot) {
+    clearChat(slot);
     slot.active = false;
+    slot.idle = 0;
+    slot.panic = 0;
+    slot.mayWait = false;
+    slot.crossWait = 0;
     if (slot.actor) slot.actor.group.visible = false;
     const index = active.indexOf(slot);
     if (index >= 0) active.splice(index, 1);
   }
 
+  function placeActor(slot, actor, speed, dt, time) {
+    const head = actor.parts.head;
+    head.rotation.y += (0 - head.rotation.y) * Math.min(1, dt * 6);
+    head.rotation.x += (0 - head.rotation.x) * Math.min(1, dt * 6);
+    const arm = actor.parts.rightArm;
+    arm.rotation.z += (0 - arm.rotation.z) * Math.min(1, dt * 8);
+
+    actor.x = slot.x;
+    actor.z = slot.z;
+    actor.heading = slot.heading;
+    actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
+    actor.group.rotation.y = slot.heading;
+    animateActor(actor, speed, time + slot.seed, dt);
+  }
+
   function step(slot, dt, time) {
     const actor = slot.actor;
+
+    // A car coming straight at someone on the pavement: run clear.
+    if (!slot.crossing) {
+      const danger = trafficNear(slot.x, slot.z, PANIC_RANGE, 3);
+      if (danger) {
+        slot.idle = 0;
+        clearChat(slot);
+        slot.panic = Math.max(slot.panic, 0.65);
+        const dx = slot.x - danger.x;
+        const dz = slot.z - danger.z;
+        const len = Math.hypot(dx, dz) || 1;
+        slot.dodgeX = dx / len;
+        slot.dodgeZ = dz / len;
+      }
+    }
+
+    if (slot.panic > 0) {
+      slot.panic -= dt;
+      const next = moveCircle(
+        slot.x,
+        slot.z,
+        slot.dodgeX * PANIC_SPEED * dt,
+        slot.dodgeZ * PANIC_SPEED * dt,
+        NPC_RADIUS,
+        world.colliders,
+      );
+      const moved = Math.hypot(next.x - slot.x, next.z - slot.z);
+      slot.x = next.x;
+      slot.z = next.z;
+      turnToward(slot, Math.atan2(slot.dodgeX, slot.dodgeZ), dt);
+      placeActor(slot, actor, moved > 0.002 ? PANIC_SPEED : 0.6, dt, time);
+      return;
+    }
+
     if (slot.idle > 0) {
       slot.idle -= dt;
-      animateActor(actor, 0, time + slot.seed, dt);
-      actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
-      return;
+      if (slot.idle <= 0) {
+        clearChat(slot);
+        slot.idle = 0;
+      } else {
+        idleFrame(slot, dt, time);
+        return;
+      }
+    }
+
+    // Wait at the kerb while a car is coming through the crossing.
+    if (slot.mayWait && slot.crossing) {
+      const target = nodes[slot.target];
+      const midX = (slot.x + target.x) / 2;
+      const midZ = (slot.z + target.z) / 2;
+      if (trafficNear(midX, midZ, CROSS_LOOK, 2)) {
+        slot.crossWait += dt;
+        if (slot.crossWait < CROSS_PATIENCE) {
+          slot.idleKind = 'look';
+          idleFrame(slot, dt, time);
+          return;
+        }
+      }
+      slot.mayWait = false;
+      slot.crossWait = 0;
+    }
+
+    // Two people walking past each other sometimes stop to talk.
+    if (slot.chatCooldown > 0) {
+      slot.chatCooldown -= dt;
+    } else {
+      const partner = findChatPartner(slot);
+      if (partner && Math.random() < 0.5) {
+        startChat(slot, partner);
+        idleFrame(slot, dt, time);
+        return;
+      }
+      slot.chatCooldown = rnd(1.5, 3.5);
     }
 
     const target = nodes[slot.target];
     const dx = target.x - slot.x;
     const dz = target.z - slot.z;
     const dist = Math.hypot(dx, dz);
-    const move = slot.speed * dt;
+
+    // Everyone hurries to clear the road when a car is close.
+    let speed = slot.speed;
+    if (slot.crossing && trafficNear(slot.x, slot.z, 12, 2)) {
+      speed = Math.max(speed, 3.3);
+    }
+    const move = speed * dt;
 
     if (dist <= Math.max(move, 0.06)) {
       slot.x = target.x;
       slot.z = target.z;
       const arrived = slot.target;
-      slot.target = chooseNext(arrived, slot.from);
+      const choice = chooseNext(arrived, slot.from);
+      slot.target = choice.node;
+      slot.crossing = choice.crossing;
       slot.from = arrived;
-      if (chance(0.04)) slot.idle = rnd(0.7, 2.2);
+      slot.mayWait = choice.crossing;
+      slot.crossWait = 0;
+      if (chance(0.04)) {
+        beginIdle(slot, rnd(0.7, 2.2));
+        idleFrame(slot, dt, time);
+        return;
+      }
     } else {
       const stepX = (dx / dist) * move;
       const stepZ = (dz / dist) * move;
@@ -584,18 +854,8 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
 
     const toward = nodes[slot.target];
     const want = Math.atan2(toward.x - slot.x, toward.z - slot.z);
-    let delta = want - slot.heading;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
-    slot.heading += delta * Math.min(1, dt * 10);
-
-    const y = WALK_TOP + world.ground(slot.x, slot.z);
-    actor.x = slot.x;
-    actor.z = slot.z;
-    actor.heading = slot.heading;
-    actor.group.position.set(slot.x, y, slot.z);
-    actor.group.rotation.y = slot.heading;
-    animateActor(actor, slot.speed, time + slot.seed, dt);
+    turnToward(slot, want, dt);
+    placeActor(slot, actor, speed, dt, time);
   }
 
   function update(dt, time) {
@@ -623,7 +883,12 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
 
   function reset() {
     for (const slot of slots) {
+      clearChat(slot);
       slot.active = false;
+      slot.idle = 0;
+      slot.panic = 0;
+      slot.mayWait = false;
+      slot.crossWait = 0;
       if (slot.actor) slot.actor.group.visible = false;
     }
     active.length = 0;

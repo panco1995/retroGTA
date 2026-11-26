@@ -54,6 +54,7 @@
       <div class="menu-card">
         <div class="boot-title" data-i18n="pauseTitle"></div>
         <nav id="pause-home" class="menu-list">
+          <button type="button" id="pause-map" data-i18n="pauseMap"></button>
           <button type="button" id="pause-lang" data-i18n="pauseLang"></button>
           <button type="button" id="pause-controls" data-i18n="pauseControls"></button>
           <button type="button" id="pause-cheats" data-i18n="pauseCheats"></button>
@@ -77,6 +78,13 @@
           <button type="button" id="pause-cheats-back" class="menu-back" data-i18n="menuBack"></button>
         </section>
       </div>
+      <section id="pause-map-panel" class="menu-panel pause-map-panel" hidden>
+        <div class="pause-map-heading" data-i18n="pauseMap"></div>
+        <div class="pause-map-frame">
+          <canvas id="pause-map-canvas"></canvas>
+        </div>
+        <button type="button" id="pause-map-back" class="menu-back" data-i18n="menuBack"></button>
+      </section>
     </div>
 
     <script type="module">

@@ -142,6 +142,8 @@ export function createGame(canvas) {
   const cheatsPanel = document.getElementById('pause-cheats-panel');
   const cheatSelect = document.getElementById('cheat-vehicle-type');
   const cheatStatus = document.getElementById('cheat-status');
+  const mapPanel = document.getElementById('pause-map-panel');
+  const mapCanvas = document.getElementById('pause-map-canvas');
 
   function placeOnFoot(actor, x, z, heading) {
     actor.x = x;
@@ -738,6 +740,19 @@ function collidersFor(includeHero, ignore) {
   onBindingsChange(updateHud);
   fillCheatVehicles();
 
+  function drawPauseMap() {
+    if (mapPanel.hidden) return;
+    const focus = mode === 'drive' ? hero : player;
+    minimap.drawFull(mapCanvas, { x: focus.x, z: focus.z, heading: focus.heading }, world.vehicles);
+  }
+
+  document.getElementById('pause-map').addEventListener('click', () => {
+    pauseHomeEl.hidden = true;
+    mapPanel.hidden = false;
+    drawPauseMap();
+  });
+  document.getElementById('pause-map-back').addEventListener('click', () => resetPauseControls());
+
   document.getElementById('pause-cheats').addEventListener('click', () => {
     pauseHomeEl.hidden = true;
     cheatsPanel.hidden = false;
@@ -792,8 +807,8 @@ function collidersFor(includeHero, ignore) {
     if (!started || suppressEsc) return;
     event.preventDefault();
     if (paused) {
-      if (!cheatsPanel.hidden) resetPauseControls();
-      else closePause();
+      if (!pauseHomeEl.hidden) closePause();
+      else resetPauseControls();
     } else {
       openPause();
     }
@@ -809,6 +824,7 @@ function collidersFor(includeHero, ignore) {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    drawPauseMap();
   });
 
   for (const vehicle of world.vehicles) vehicle.updateVisual(0);
@@ -869,7 +885,11 @@ function collidersFor(includeHero, ignore) {
     for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     updateCamera(dt, false);
     updateHud();
-    minimap.draw(mode === 'drive' ? { x: hero.x, z: hero.z, heading: hero.heading } : player, world.vehicles);
+    const focus = mode === 'drive' ? hero : player;
+    const range = mode === 'drive'
+      ? THREE.MathUtils.clamp(64 + Math.abs(hero.speed) * 1.9, 64, 108)
+      : 56;
+    minimap.draw(focus, world.vehicles, { range });
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }

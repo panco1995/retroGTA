@@ -188,10 +188,8 @@ body.rebinding #map {
   bottom: 58px;
   width: 168px;
   height: 168px;
-  border-radius: 10px;
-  background: rgba(12, 14, 12, 0.72);
-  border: 1px solid rgba(240, 212, 138, 0.35);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.45);
 }
 
 #hint {
@@ -298,6 +296,51 @@ body.rebinding #map {
   align-items: center;
   padding-left: 72px;
   background: rgba(0, 0, 0, 0.55);
+}
+
+.pause-map-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  padding: 22px;
+  background: radial-gradient(circle at 50% 45%, rgba(12, 18, 16, 0.985), rgba(3, 5, 5, 0.995));
+  text-shadow: 0 2px 0 #000;
+}
+
+.pause-map-panel[hidden] { display: none; }
+
+.pause-map-heading {
+  color: var(--amber);
+  font-size: 14px;
+  letter-spacing: 0.34em;
+}
+
+.pause-map-frame {
+  max-width: min(90vw, 1080px);
+  padding: 8px;
+  border: 1px solid rgba(240, 212, 138, 0.35);
+  border-radius: 10px;
+  background: rgba(10, 14, 14, 0.88);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+
+#pause-map-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(100vh - 190px);
+  border-radius: 6px;
+}
+
+.pause-map-panel .menu-back {
+  margin-top: 2px;
 }
 
 .boot-kicker {

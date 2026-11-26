@@ -20,10 +20,10 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Pedestrians walk a path
 - Building collision; people and cars follow the surface height
 - Movement stays on the walkable ground
-- Minimap showing the safehouse, vehicles, and the player's heading
+- GTA-style round minimap: the area around the player, rotating with the heading, with the safehouse and vehicles marked
 - Main menu: Start, Settings, and About
 - Rebind keys in Settings, or from Controls while paused. The choice is saved in the browser
-- Pause with Esc: controls, switch language, cheats, restart, or exit to the main menu
+- Pause with Esc: map, controls, switch language, cheats, restart, or exit to the main menu. Map opens the whole island, north up
 - Cheat menu: spawn a chosen vehicle beside the player. Restart removes those vehicles
 
 ## Languages
@@ -65,9 +65,9 @@ Settings, and Controls on the pause menu, rebind the keys below. Click a binding
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
 | E | Walk to the nearest door, open it, and get in | Exit when moving slowly |
 | Space | — | Brake |
-| Esc | Pause. Language, cheats, restart, or exit | Pause. Language, cheats, restart, or exit |
+| Esc | Pause. Map, controls, language, cheats, restart, or exit | Pause. Map, controls, language, cheats, restart, or exit |
 
-The minimap is at the bottom left: the light block is the safehouse, the yellow dot is the car you are driving. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
+The round minimap at the bottom left only shows the area around the player and turns so the player faces up; driving fast widens the view. The arrow is the player, the cyan dot is the safehouse, and white dots are parked vehicles. The map in the pause menu shows the whole island with north up. While driving, speed is shown at the top right in km/h. Reverse speed is negative.
 
 ## Map data
 

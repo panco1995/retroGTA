@@ -7,6 +7,7 @@ import { animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { onLangChange, t, toggleLang } from './i18n.js';
+import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
 
 const ENTER_DIST = 4.8;
@@ -157,6 +158,7 @@ export function createGame(canvas) {
 
   function openPause() {
     if (!started || paused) return;
+    resetPauseControls();
     paused = true;
     suppressEsc = true;
     document.exitPointerLock();
@@ -264,7 +266,7 @@ function collidersFor(includeHero) {
     player.group.position.set(player.x, WALK_TOP + world.ground(player.x, player.z), player.z);
     animateActor(player, speed, time, dt);
 
-    if (input.consume('KeyE')) {
+    if (input.consume('interact')) {
       const dx = player.x - hero.x;
       const dz = player.z - hero.z;
       if (dx * dx + dz * dz < ENTER_DIST * ENTER_DIST) enterCar();
@@ -309,7 +311,7 @@ function collidersFor(includeHero) {
     );
     hero.pitch = -Math.atan2(nose - hero.y, ahead);
 
-    if (input.consume('KeyE') && Math.abs(hero.speed) < 2.5) exitCar();
+    if (input.consume('interact') && Math.abs(hero.speed) < 2.5) exitCar();
   }
 
   function updatePeds(dt, time) {
@@ -418,22 +420,24 @@ function collidersFor(includeHero) {
       promptEl.style.opacity = '0';
       return;
     }
+    const keys = keyVars();
     if (mode === 'drive') {
       setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
-      setText(hintEl, t('hintDrive', { view: viewLabel() }));
+      setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
       promptEl.style.opacity = '0';
     } else {
       setText(speedEl, t('onFoot'));
       setText(hintEl, view === 'follow'
-        ? t('hintFollow')
-        : t('hintFixed', { view: viewLabel() }));
+        ? t('hintFollow', keys)
+        : t('hintFixed', { ...keys, view: viewLabel() }));
       const near = (player.x - hero.x) ** 2 + (player.z - hero.z) ** 2 < ENTER_DIST * ENTER_DIST;
-      promptEl.textContent = near ? t('enterCar') : '';
+      promptEl.textContent = near ? t('enterCar', keys) : '';
       promptEl.style.opacity = near ? '1' : '0';
     }
   }
 
   onLangChange(updateHud);
+  onBindingsChange(updateHud);
 
   document.addEventListener('mousemove', (e) => {
     if (!started || view !== 'follow' || document.pointerLockElement !== canvas) return;
@@ -468,6 +472,7 @@ function collidersFor(includeHero) {
     pauseEl.classList.add('hidden');
     hudEl.classList.add('hidden');
     menuEl.classList.remove('hidden');
+    resetPauseControls();
     openMainMenu();
     document.exitPointerLock();
     input.release();
@@ -509,7 +514,7 @@ function collidersFor(includeHero) {
       return;
     }
 
-    if (started && input.consume('KeyV')) {
+    if (started && input.consume('camera')) {
       view = view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow';
       if (view !== 'follow') document.exitPointerLock();
     }

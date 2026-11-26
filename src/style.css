@@ -88,6 +88,70 @@ canvas#c {
   border-color: rgba(240, 212, 138, 0.9);
 }
 
+.controls-heading { margin-top: 22px; }
+
+#menu-settings,
+#pause-controls-panel {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+
+#controls,
+#pause-controls-list {
+  width: 240px;
+}
+
+body.rebinding #map {
+  visibility: hidden;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 2px 0;
+}
+
+.control-row span {
+  font-size: 16px;
+  letter-spacing: 0.12em;
+}
+
+.control-row button {
+  min-width: 88px;
+  border: 1px solid rgba(240, 212, 138, 0.45);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.control-row button.listening,
+.control-row button:hover,
+.control-row button:focus-visible {
+  color: var(--amber);
+  border-color: rgba(240, 212, 138, 0.9);
+}
+
+.controls-reset {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.controls-reset:hover,
+.controls-reset:focus-visible { color: var(--amber); }
+
 #map {
   position: absolute;
   left: 18px;

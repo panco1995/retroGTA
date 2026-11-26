@@ -1,14 +1,16 @@
+import { codesFor, isCapturing } from './bindings.js';
+
+const BLOCK = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab']);
+
 export function createInput(canvas) {
   const down = new Set();
   const pressed = new Set();
 
   window.addEventListener('keydown', (e) => {
-    if (e.repeat) return;
+    if (e.repeat || isCapturing()) return;
     down.add(e.code);
     pressed.add(e.code);
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
-      e.preventDefault();
-    }
+    if (BLOCK.has(e.code)) e.preventDefault();
   });
 
   window.addEventListener('keyup', (e) => {
@@ -20,18 +22,19 @@ export function createInput(canvas) {
     pressed.clear();
   });
 
-  const has = (...codes) => codes.some((code) => down.has(code));
+  const held = (action) => codesFor(action).some((code) => down.has(code));
 
   return {
-    get w() { return has('KeyW', 'ArrowUp'); },
-    get a() { return has('KeyA', 'ArrowLeft'); },
-    get s() { return has('KeyS', 'ArrowDown'); },
-    get d() { return has('KeyD', 'ArrowRight'); },
-    get run() { return has('ShiftLeft', 'ShiftRight'); },
-    get brake() { return has('Space'); },
-    consume(code) {
-      if (!pressed.has(code)) return false;
-      pressed.delete(code);
+    get w() { return held('forward'); },
+    get a() { return held('left'); },
+    get s() { return held('back'); },
+    get d() { return held('right'); },
+    get run() { return held('run'); },
+    get brake() { return held('brake'); },
+    consume(action) {
+      const codes = codesFor(action);
+      if (!codes.some((code) => pressed.has(code))) return false;
+      for (const code of codes) pressed.delete(code);
       return true;
     },
     release() {

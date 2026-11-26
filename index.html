@@ -36,11 +36,14 @@
             <button type="button" data-lang="en">EN</button>
             <button type="button" data-lang="zh">中文</button>
           </div>
+          <div class="settings-label controls-heading" data-i18n="controls"></div>
+          <div id="controls"></div>
+          <button type="button" id="controls-reset" class="controls-reset" data-i18n="controlsReset"></button>
           <button type="button" class="menu-back" data-menu="home" data-i18n="menuBack"></button>
         </section>
         <section id="menu-about" class="menu-panel" hidden>
           <p class="about-copy" data-i18n="aboutCopy"></p>
-          <p class="boot-keys" data-i18n="bootKeys"></p>
+          <p class="boot-keys" id="boot-keys"></p>
           <button type="button" class="menu-back" data-menu="home" data-i18n="menuBack"></button>
         </section>
       </div>
@@ -49,19 +52,28 @@
     <div id="pause" class="hidden">
       <div class="menu-card">
         <div class="boot-title" data-i18n="pauseTitle"></div>
-        <nav class="menu-list">
+        <nav id="pause-home" class="menu-list">
           <button type="button" id="pause-lang" data-i18n="pauseLang"></button>
+          <button type="button" id="pause-controls" data-i18n="pauseControls"></button>
           <button type="button" id="pause-restart" data-i18n="pauseRestart"></button>
           <button type="button" id="pause-exit" data-i18n="pauseExit"></button>
         </nav>
+        <section id="pause-controls-panel" class="menu-panel" hidden>
+          <div class="settings-label" data-i18n="controls"></div>
+          <div id="pause-controls-list"></div>
+          <button type="button" id="pause-controls-reset" class="controls-reset" data-i18n="controlsReset"></button>
+          <button type="button" id="pause-controls-back" class="menu-back" data-i18n="menuBack"></button>
+        </section>
       </div>
     </div>
 
     <script type="module">
       import { initI18n } from '/src/i18n.js';
       import { initMenu } from '/src/menu.js';
+      import { initBindings } from '/src/bindings.js';
       initI18n();
       initMenu();
+      initBindings();
     </script>
     <script type="module" src="/src/main.js"></script>
   </body>

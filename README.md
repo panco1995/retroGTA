@@ -17,18 +17,13 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 
 - Walk, run, enter a car, drive, brake, and exit
 - Three cameras: follow, top-down, and 2.5D
-- Safehouse: a light three-story building with a stoop, door light, and ground ring, at the foot of the riverside avenue
-- The slope outside the safehouse, ending at a small raised intersection
-- Row houses and warehouses: brick walls, windows, awnings, signs, fire escapes, and roof tanks
-- Coast, beach, a diagonal road on the east shore, a bridge to the west, and a landing
-- An elevated track over the water on the west side, and a gate on the south edge
-- Three pedestrians walking the sidewalks
-- One driveable sedan, plus parked taxis, vans, and other cars
-- Building collision; people and cars follow the road height
-- Movement limited to the island, the bridge deck, and the landing
+- Pedestrians walk a path
+- Building collision; people and cars follow the surface height
+- Movement stays on the walkable ground
 - Minimap showing the safehouse, vehicles, and the player's heading
 - Main menu: Start, Settings, and About
-- Pause with Esc: switch language, restart, or exit to the main menu
+- Rebind keys in Settings, or from Controls while paused. The choice is saved in the browser
+- Pause with Esc: controls, switch language, restart, or exit to the main menu
 
 ## Languages
 
@@ -55,7 +50,9 @@ npm run preview  # serves the build
 
 ## Controls
 
-Choose Start on the main menu. In the follow camera, the mouse turns the view. Press Esc to pause. Esc again resumes, then click the picture to lock the pointer. The top-down and 2.5D cameras stay fixed, and WASD moves relative to the screen.
+Choose Start on the main menu. In the follow camera, the mouse turns the view. Press Esc to pause. Esc again resumes, then click the picture to lock the pointer. The top-down and 2.5D cameras stay fixed, and movement keys move relative to the screen.
+
+Settings, and Controls on the pause menu, rebind the keys below. Click a binding and press the new key. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. The choice is saved in the browser. Esc still pauses.
 
 | Key | On foot | Driving |
 | --- | --- | --- |
@@ -108,6 +105,7 @@ A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx`
 | `src/collision.js` | Circle collision on the ground, plus the walkable island and bridge |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
 | `src/i18n.js` | English and Chinese interface strings |
+| `src/bindings.js` | Key bindings, saved in the browser |
 | `src/input.js` | Keyboard and pointer lock |
 | `src/minimap.js` | Minimap |
 | `src/style.css` | HUD styles |

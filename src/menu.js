@@ -1,3 +1,5 @@
+import { cancelCapture } from './bindings.js';
+
 let showMenu = () => {};
 
 export function initMenu() {
@@ -8,6 +10,7 @@ export function initMenu() {
   };
 
   showMenu = (name) => {
+    cancelCapture();
     home.hidden = name !== 'home';
     for (const [key, panel] of Object.entries(panels)) panel.hidden = key !== name;
   };

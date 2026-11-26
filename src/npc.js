@@ -894,5 +894,11 @@ export function createPedestrianCrowd({ scene, world, camera, getFocus, avoid })
     active.length = 0;
   }
 
-  return { update, reset };
+  return {
+    update,
+    reset,
+    positions() {
+      return active;
+    },
+  };
 }

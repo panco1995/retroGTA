@@ -82,6 +82,11 @@ export function buildCity() {
   const stripes = [];
   // Sidewalk center lines. The crowd walks these and spawns on them.
   const walkways = [];
+  // Road spans that run unbroken between two intersections, and the clockwise
+  // lane loops around each city block that uses four of them.
+  const fullSpans = new Set();
+  const intersections = new Set();
+  const trafficLoops = [];
   let safehouse = null;
   let shopCount = 0;
 
@@ -539,6 +544,77 @@ const platW = Math.min(w * 0.34, 2.4);
     roads.push({ x: roadX, z: (zLow + zNorth - taper) / 2, w: ROAD_W, d: zLow - (zNorth - taper) });
   }
 
+  // A clockwise lane loop around one city block. All four sides are drivable
+  // road spans, and the loops of neighbouring blocks give two-way traffic.
+  function addTrafficLoops() {
+    const lane = ROAD_W / 4 - 0.7;
+    const radius = 4.2;
+    const arcSteps = 6;
+    const dirs = [
+      { x: 1, z: 0 },
+      { x: 0, z: 1 },
+      { x: -1, z: 0 },
+      { x: 0, z: -1 },
+    ];
+    for (const block of MAP.blocks) {
+      const { col, row } = block;
+      if (!intersections.has(`${col}:${row}`)
+        || !intersections.has(`${col + 1}:${row}`)
+        || !intersections.has(`${col}:${row + 1}`)
+        || !intersections.has(`${col + 1}:${row + 1}`)) continue;
+      if (!fullSpans.has(`H:${col}:${row}`)
+        || !fullSpans.has(`H:${col}:${row + 1}`)
+        || !fullSpans.has(`V:${col}:${row}`)
+        || !fullSpans.has(`V:${col + 1}:${row}`)) continue;
+
+      const xL = ROADS_X[col];
+      const xR = ROADS_X[col + 1];
+      const zN = ROADS_Z[row];
+      const zS = ROADS_Z[row + 1];
+      if (xR - xL < lane * 2 + radius * 2 + 4) continue;
+      if (zS - zN < lane * 2 + radius * 2 + 4) continue;
+
+      const corners = [
+        { x: xL + lane, z: zN + lane },
+        { x: xR - lane, z: zN + lane },
+        { x: xR - lane, z: zS - lane },
+        { x: xL + lane, z: zS - lane },
+      ];
+      const points = [];
+      for (let i = 0; i < 4; i += 1) {
+        const corner = corners[i];
+        const prev = dirs[(i + 3) % 4];
+        const dir = dirs[i];
+        const start = {
+          x: corner.x - prev.x * radius,
+          z: corner.z - prev.z * radius,
+        };
+        const end = {
+          x: corner.x + dir.x * radius,
+          z: corner.z + dir.z * radius,
+        };
+        points.push(start);
+        for (let k = 1; k <= arcSteps; k += 1) {
+          const t = k / arcSteps;
+          const mt = 1 - t;
+          points.push({
+            x: mt * mt * start.x + 2 * mt * t * corner.x + t * t * end.x,
+            z: mt * mt * start.z + 2 * mt * t * corner.z + t * t * end.z,
+          });
+        }
+      }
+      points.push({ ...points[0] });
+      const cum = [0];
+      for (let i = 1; i < points.length; i += 1) {
+        cum.push(cum[i - 1] + Math.hypot(
+          points[i].x - points[i - 1].x,
+          points[i].z - points[i - 1].z,
+        ));
+      }
+      trafficLoops.push({ points, cum, total: cum[cum.length - 1] });
+    }
+  }
+
   function buildRoads() {
     const half = ROAD_W / 2;
     const onLand = (x, z) => insidePolygon(x, z, MAP.island) && !hillCovers(x, z);
@@ -559,9 +635,10 @@ const platW = Math.min(w * 0.34, 2.4);
       return found;
     };
 
-    for (const x of ROADS_X) {
-      for (const z of ROADS_Z) {
-        if (!onLand(x, z)) continue;
+    ROADS_X.forEach((x, col) => {
+      ROADS_Z.forEach((z, row) => {
+        if (!onLand(x, z)) return;
+        intersections.add(`${col}:${row}`);
         addAsphalt(x, z, ROAD_W, ROAD_W);
         const o = half + WALK / 2;
         for (const sx of [-1, 1]) {
@@ -575,9 +652,9 @@ const platW = Math.min(w * 0.34, 2.4);
           { x0: x - o, z0: z - o, x1: x - o, z1: z + o, crossing: true },
           { x0: x + o, z0: z - o, x1: x + o, z1: z + o, crossing: true },
         );
-      }
-    }
-    for (const z of ROADS_Z) {
+      });
+    });
+    ROADS_Z.forEach((z, row) => {
       for (let i = 0; i < ROADS_X.length - 1; i++) {
         const a = ROADS_X[i] + half;
         const b = ROADS_X[i + 1] - half;
@@ -585,6 +662,7 @@ const platW = Math.min(w * 0.34, 2.4);
           const x0 = a + (b - a) * t0;
           const x1 = a + (b - a) * t1;
           if (x1 - x0 < 6) continue;
+          if (t0 <= 0 && t1 >= 1) fullSpans.add(`H:${i}:${row}`);
           addAsphalt((x0 + x1) / 2, z, x1 - x0, ROAD_W);
           addWalk((x0 + x1) / 2, z - half - WALK / 2, x1 - x0, WALK);
           addWalk((x0 + x1) / 2, z + half + WALK / 2, x1 - x0, WALK);
@@ -603,8 +681,8 @@ const platW = Math.min(w * 0.34, 2.4);
           }
         }
       }
-    }
-    for (const x of ROADS_X) {
+    });
+    ROADS_X.forEach((x, col) => {
       for (let i = 0; i < ROADS_Z.length - 1; i++) {
         const a = ROADS_Z[i] + half;
         const b = ROADS_Z[i + 1] - half;
@@ -612,6 +690,7 @@ const platW = Math.min(w * 0.34, 2.4);
           const z0 = a + (b - a) * t0;
           const z1 = a + (b - a) * t1;
           if (z1 - z0 < 6) continue;
+          if (t0 <= 0 && t1 >= 1) fullSpans.add(`V:${col}:${i}`);
           addAsphalt(x, (z0 + z1) / 2, ROAD_W, z1 - z0);
           addWalk(x - half - WALK / 2, (z0 + z1) / 2, WALK, z1 - z0);
           addWalk(x + half + WALK / 2, (z0 + z1) / 2, WALK, z1 - z0);
@@ -628,7 +707,7 @@ const platW = Math.min(w * 0.34, 2.4);
           }
         }
       }
-    }
+    });
   }
 
   function addDashes(a, b, fixed, axis) {
@@ -917,6 +996,7 @@ const platW = Math.min(w * 0.34, 2.4);
 
   const deck = [];
   buildRoads();
+  addTrafficLoops();
   if (MAP.hill?.pad) {
     const h = MAP.hill;
     h.pad.y = h.rise * (h.zLow - h.pad.doorZ) / (h.zLow - h.zHigh);
@@ -1046,6 +1126,7 @@ const platW = Math.min(w * 0.34, 2.4);
     vehicles,
     pedestrians,
     walkways,
+    trafficLoops,
     spawn,
     safehouse,
     ground: groundHeight,

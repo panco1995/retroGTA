@@ -183,6 +183,8 @@ export function createMinimap(canvas, world) {
     }
 
     for (const v of vehicles) {
+      // Moving traffic stays off the map so the radar reads clearly.
+      if (v.traffic) continue;
       const [sx, sy] = toScreen(v.x, v.z);
       if (Math.hypot(sx - cx, sy - cy) > radius + 4) continue;
       ctx.fillStyle = blipColor(v);
@@ -249,6 +251,7 @@ export function createMinimap(canvas, world) {
     g.drawImage(base, 0, 0);
 
     for (const v of vehicles) {
+      if (v.traffic) continue;
       const x = (v.x - bounds.minX) * scale;
       const y = (v.z - bounds.minZ) * scale;
       g.fillStyle = blipColor(v);

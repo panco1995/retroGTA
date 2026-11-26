@@ -7,6 +7,7 @@ import { animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
+import { createTraffic } from './traffic.js';
 import { onLangChange, t, toggleLang } from './i18n.js';
 import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
@@ -140,6 +141,15 @@ export function createGame(canvas) {
     camera,
     getFocus: () => (mode === 'drive' ? hero : player),
     avoid: () => peds,
+  });
+  const traffic = createTraffic({
+    scene,
+    world,
+    camera,
+    getFocus: () => (mode === 'drive' ? hero : player),
+    getPedestrians: () => crowd.positions(),
+    getFoot: () => (mode === 'foot' ? player : null),
+    getTarget: () => approach?.vehicle ?? pendingEnter?.vehicle ?? null,
   });
 
   const speedEl = document.getElementById('speed');
@@ -346,6 +356,17 @@ export function createGame(canvas) {
     pendingEnter = null;
     pendingExit = null;
     removeCheatVehicles();
+    // A car taken from traffic is not in vehicleHome; leave it parked where it
+    // was instead of keeping it marked as driven with no collider.
+    if (hero && !hero.cheat && !vehicleHome.some((home) => home.vehicle === hero)) {
+      hero.traffic = false;
+      hero.trafficIndex = undefined;
+      hero.inUse = false;
+      hero.speed = 0;
+      hero.braking = false;
+      hero.closeDoor();
+      addVehicleCollider(hero);
+    }
     for (const home of vehicleHome) {
       home.vehicle.inUse = false;
       home.vehicle.closeDoor();
@@ -376,6 +397,7 @@ export function createGame(canvas) {
       setPose(ped, 'stand');
     });
     crowd.reset();
+    traffic.reset();
     world.reset();
     input.release();
   }
@@ -515,9 +537,15 @@ function collidersFor(includeHero, ignore) {
     animateActor(player, speed, time, dt);
   }
 
-  // Walks the character to the door of the picked vehicle.
+  // Walks the character to the door of the picked vehicle. A car taken from
+  // traffic is still moving at first, so its door spot is refreshed each frame.
   function updateApproach(dt, time) {
     const target = approach;
+    if (target.vehicle.traffic) {
+      const spot = approachSpot(target.vehicle);
+      target.x = spot.x;
+      target.z = spot.z;
+    }
     const dx = target.x - player.x;
     const dz = target.z - player.z;
     const dist = Math.hypot(dx, dz);
@@ -934,8 +962,9 @@ function collidersFor(includeHero, ignore) {
 
     updatePeds(dt, elapsed);
     world.update(dt, elapsed);
-    for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     updateCamera(dt, false);
+    traffic.update(dt);
+    for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     crowd.update(dt, elapsed);
     updateHud();
     const focus = mode === 'drive' ? hero : player;
@@ -957,6 +986,7 @@ function collidersFor(includeHero, ignore) {
         player,
         world,
         crowd,
+        traffic,
         get hero() { return hero; },
         get mode() { return mode; },
         get started() { return started; },

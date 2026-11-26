@@ -6,6 +6,7 @@ import { blocked, moveCircle } from './collision.js';
 import { animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
+import { createPedestrianCrowd } from './npc.js';
 import { onLangChange, t, toggleLang } from './i18n.js';
 import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
 import { openMainMenu } from './menu.js';
@@ -87,6 +88,8 @@ export function createGame(canvas) {
   player.group.rotation.y = spawn.heading;
   scene.add(player.group);
 
+  // People pinned in the map file by hand: they always exist and walk their
+  // own path, unlike the crowd that streams around the player.
   const peds = world.pedestrians.map((spec) => {
     const actor = createActor(spec);
     actor.x = spec.x;
@@ -131,6 +134,13 @@ export function createGame(canvas) {
   const look = new THREE.Vector3();
   const desired = new THREE.Vector3();
   let camReady = false;
+  const crowd = createPedestrianCrowd({
+    scene,
+    world,
+    camera,
+    getFocus: () => (mode === 'drive' ? hero : player),
+    avoid: () => peds,
+  });
 
   const speedEl = document.getElementById('speed');
   const hintEl = document.getElementById('hint');
@@ -365,6 +375,7 @@ export function createGame(canvas) {
       placeOnFoot(ped, home.x, home.z, home.heading);
       setPose(ped, 'stand');
     });
+    crowd.reset();
     world.reset();
     input.release();
   }
@@ -884,6 +895,7 @@ function collidersFor(includeHero, ignore) {
     world.update(dt, elapsed);
     for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     updateCamera(dt, false);
+    crowd.update(dt, elapsed);
     updateHud();
     const focus = mode === 'drive' ? hero : player;
     const range = mode === 'drive'
@@ -903,6 +915,7 @@ function collidersFor(includeHero, ignore) {
     ? {
         player,
         world,
+        crowd,
         get hero() { return hero; },
         get mode() { return mode; },
         get started() { return started; },

@@ -80,6 +80,8 @@ export function buildCity() {
   const roads = [];
   const markers = [];
   const stripes = [];
+  // Sidewalk center lines. The crowd walks these and spawns on them.
+  const walkways = [];
   let safehouse = null;
   let shopCount = 0;
 
@@ -500,6 +502,14 @@ const platW = Math.min(w * 0.34, 2.4);
     addRamp(roadX, zNorth, zNorth - taper, ROAD_W, ROAD_TOP + rise, ROAD_TOP, asphaltMat);
     addRamp(roadX - walkOff, zNorth, zNorth - taper, WALK, WALK_TOP + rise, WALK_TOP, walkMat);
     addRamp(roadX + walkOff, zNorth, zNorth - taper, WALK, WALK_TOP + rise, WALK_TOP, walkMat);
+    // Sidewalks on the approach and on the far slope, so people walk the hill.
+    for (const side of [-1, 1]) {
+      const wx = roadX + side * walkOff;
+      walkways.push(
+        { x0: wx, z0: zLow, x1: wx, z1: zHigh },
+        { x0: wx, z0: zNorth, x1: wx, z1: zNorth - taper },
+      );
+    }
     for (const side of [-1, 1]) {
       const armReach = side < 0 ? (h.west ?? taper) : taper;
       const x0 = roadX + side * half;
@@ -558,6 +568,13 @@ const platW = Math.min(w * 0.34, 2.4);
           for (const sz of [-1, 1]) addWalk(x + sx * o, z + sz * o, WALK, WALK);
         }
         addCrosswalk(x, z, half);
+        // Links between the four corners, so the crowd can cross a road.
+        walkways.push(
+          { x0: x - o, z0: z - o, x1: x + o, z1: z - o },
+          { x0: x - o, z0: z + o, x1: x + o, z1: z + o },
+          { x0: x - o, z0: z - o, x1: x - o, z1: z + o },
+          { x0: x + o, z0: z - o, x1: x + o, z1: z + o },
+        );
       }
     }
     for (const z of ROADS_Z) {
@@ -571,6 +588,14 @@ const platW = Math.min(w * 0.34, 2.4);
           addAsphalt((x0 + x1) / 2, z, x1 - x0, ROAD_W);
           addWalk((x0 + x1) / 2, z - half - WALK / 2, x1 - x0, WALK);
           addWalk((x0 + x1) / 2, z + half + WALK / 2, x1 - x0, WALK);
+          // Extend into the corner pads at real intersections; a partial span
+          // that ends at the shore is a dead end on the graph.
+          const wx0 = t0 <= 0 ? ROADS_X[i] + half + WALK / 2 : x0;
+          const wx1 = t1 >= 1 ? ROADS_X[i + 1] - half - WALK / 2 : x1;
+          walkways.push(
+            { x0: wx0, z0: z - half - WALK / 2, x1: wx1, z1: z - half - WALK / 2 },
+            { x0: wx0, z0: z + half + WALK / 2, x1: wx1, z1: z + half + WALK / 2 },
+          );
           addDashes(x0, x1, z, 'x');
           for (let t = x0 + 12; t < x1 - 6; t += 26) {
             addLamp(t, z - half - WALK / 2, t, z);
@@ -590,6 +615,12 @@ const platW = Math.min(w * 0.34, 2.4);
           addAsphalt(x, (z0 + z1) / 2, ROAD_W, z1 - z0);
           addWalk(x - half - WALK / 2, (z0 + z1) / 2, WALK, z1 - z0);
           addWalk(x + half + WALK / 2, (z0 + z1) / 2, WALK, z1 - z0);
+          const wz0 = t0 <= 0 ? ROADS_Z[i] + half + WALK / 2 : z0;
+          const wz1 = t1 >= 1 ? ROADS_Z[i + 1] - half - WALK / 2 : z1;
+          walkways.push(
+            { x0: x - half - WALK / 2, z0: wz0, x1: x - half - WALK / 2, z1: wz1 },
+            { x0: x + half + WALK / 2, z0: wz0, x1: x + half + WALK / 2, z1: wz1 },
+          );
           addDashes(z0, z1, x, 'z');
           for (let t = z0 + 14; t < z1 - 6; t += 28) {
             addLamp(x - half - WALK / 2, t, x, t);
@@ -1014,6 +1045,7 @@ const platW = Math.min(w * 0.34, 2.4);
     roads,
     vehicles,
     pedestrians,
+    walkways,
     spawn,
     safehouse,
     ground: groundHeight,

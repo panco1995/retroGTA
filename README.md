@@ -17,7 +17,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 
 - Walk, run, enter a car, drive, brake, and exit
 - Three cameras: follow, top-down, and 2.5D
-- Pedestrians walk a path
+- Pedestrians: hand-placed people walk their own paths, plus a crowd that streams in and out around the player
 - Building collision; people and cars follow the surface height
 - Movement stays on the walkable ground
 - GTA-style round minimap: the area around the player, rotating with the heading, with the safehouse and vehicles marked
@@ -73,23 +73,23 @@ The round minimap at the bottom left only shows the area around the player and t
 
 Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.json`](data/saint-marks.json). `src/city.js` reads that file and builds the meshes. People and cars follow the surface height, and they can stand only on the island, the bridge deck, or the landing. The safehouse sits at the foot of the riverside avenue on the west side, with its door facing west toward the slope.
 
-| Element | Support |
+| Element | Notes |
 | --- | --- |
-| `roads` | Supported. Orthogonal road grid. Sidewalks, crosswalks, and street lamps are generated along it |
-| `blocks` | Supported. `residential` places row houses on the north and south edges. `industrial` places two south-facing warehouses. `alley` adds two dumpsters in the gap |
-| `rows` | Supported. A named house row: width, floors, wall color, shop, awning, fire escape, roof tank |
-| `safehouse` | Supported. One safehouse; the file includes it |
-| `hill` | Supported. The slope and the raised intersection outside the safehouse |
-| `island`, `beach`, `landing` | Supported. Coast, sand, and the far side of the bridge |
-| `diagonals` | Supported. Diagonal roads |
-| `bridge` | Supported. One bridge, deck at road height, with side towers |
-| `water` | Supported. One water plane |
-| `elevated`, `train` | Supported. An elevated track and a train that shuttles along it |
-| `gate` | Supported. One gate and a short approach road |
-| `trees` | Supported. Placed trees |
-| `safehouseProps` | Supported for `marker`, `hydrant`, and `trash` |
-| `vehicles` | 15 vehicle types are supported; see [Supported vehicles](#supported-vehicles). Unknown types fall back to `sedan`. Every vehicle can be entered, `driveable` marks the car the player starts next to |
-| `pedestrians` | Supported. People who walk a path, with shirt, pants, and an optional cap |
+| `roads` | Orthogonal road grid. Sidewalks, crosswalks, and street lamps are generated along it |
+| `blocks` | `residential` places row houses on the north and south edges. `industrial` places two south-facing warehouses. `alley` adds two dumpsters in the gap |
+| `rows` | A named house row: width, floors, wall color, shop, awning, fire escape, roof tank |
+| `safehouse` | One safehouse; the file includes it |
+| `hill` | The slope and the raised intersection outside the safehouse |
+| `island`, `beach`, `landing` | Coast, sand, and the far side of the bridge |
+| `diagonals` | Diagonal roads |
+| `bridge` | One bridge, deck at road height, with side towers |
+| `water` | One water plane |
+| `elevated`, `train` | An elevated track and a train that shuttles along it |
+| `gate` | One gate and a short approach road |
+| `trees` | Placed trees |
+| `safehouseProps` | `marker`, `hydrant`, and `trash` |
+| `vehicles` | 15 vehicle types; see [Supported vehicles](#supported-vehicles). Unknown types fall back to `sedan`. Every vehicle can be entered, `driveable` marks the car the player starts next to |
+| `pedestrians` | Fixed people who walk a path, with shirt, pants, and an optional cap. Separate from the crowd generated at runtime; see [Supported pedestrians](#supported-pedestrians) |
 | `bounds` | The reader accepts extra collision walls. The current map leaves this field out |
 
 A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx` / `dz`), or a `lane` (`curbNorth`, `pedSouth`, `sidewalkWest`, and so on). Vehicle and pedestrian `heading` values are degrees.
@@ -118,6 +118,27 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 
 To add a new type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the matching `type` on an entry in `data/saint-marks.json`.
 
+## Supported pedestrians
+
+The crowd picks its people from the kinds in `src/npc.js`. Hand-placed pedestrians in `data/saint-marks.json` keep their own shirt, pants, and cap colors and walk their own paths.
+
+| Kind | Pedestrian | Notes |
+| --- | --- | --- |
+| `businessman` | Businessman | Suit, tie, briefcase, short hair, sometimes a cap. Medium pace |
+| `businesswoman` | Businesswoman | Blazer, skirt, handbag, long hair. Tights or bare legs, sometimes glasses |
+| `student` | Student | Hoodie or casual top, jeans or shorts, backpack, cap or beanie, headphones |
+| `schoolkid` | Schoolchild | Shorter and larger-headed, bright backpack and shorts. Faster than adults |
+| `tourist` | Tourist | Bright shirt, shorts, sun hat, backpack or tote. Walks slowly |
+| `jogger` | Jogger | Sleeveless top, shorts, sneakers, headphones. The fastest walker |
+| `constructionWorker` | Construction worker | Heavy build, hi-vis vest, hard hat, work boots |
+| `elderly` | Elderly person | Hunched, grey or white hair, cane, beanie or cap, glasses. The slowest |
+| `courier` | Courier | Uniform shirt and cap, large backpack. Brisk pace |
+| `shopper` | Shopper | Casual clothes, tote bag or handbag. Varied builds and hair |
+| `policeOfficer` | Police officer | Navy uniform, police cap, belt. Rare |
+| `punk` | Punk | Dyed hair, beanie, dark clothes, headphones |
+
+Weights in `KINDS` decide how often a kind appears; each spawn also rolls height, build, skin, hair, and clothing colors. To add a kind, append an entry to `KINDS` with a `weight` and a `make()` that returns the actor options (see the existing entries for the fields).
+
 ## Layout
 
 | File | Role |
@@ -128,6 +149,7 @@ To add a new type, write a builder in `src/vehicle.js`, register it in `BUILDERS
 | `src/city.js` | Reads the map and builds roads, buildings, the elevated track, and colliders |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Low-poly people, walk cycle, and the seated pose |
+| `src/npc.js` | Pedestrian kinds, sidewalk graph, and the crowd that streams around the player |
 | `src/vehicle.js` | Sedan, taxi, hatchback, SUV, pickup, sports car, van, bus, box truck, excavator, tractor, ambulance, fire truck, police car, and cement mixer |
 | `src/collision.js` | Circle collision on the ground, plus the walkable island and bridge |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |

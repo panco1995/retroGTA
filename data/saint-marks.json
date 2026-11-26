@@ -117,7 +117,19 @@
     { "x": 8, "lane": "curbSouth", "heading": -90, "type": "sedan", "color": "#1a1c28" },
     { "along": { "road": "x", "index": 1, "side": "east" }, "z": -20, "heading": 180, "type": "sedan", "color": "#3f3328" },
     { "x": 146, "z": 20, "heading": 25, "type": "taxi", "color": "#d6ae2b" },
-    { "x": -96, "z": 78, "heading": 210, "type": "van", "color": "#3a4038" }
+    { "x": -96, "z": 78, "heading": 210, "type": "van", "color": "#3a4038" },
+    { "laneX": "curbEast", "roadIndex": 2, "z": -70, "heading": 180, "type": "hatchback", "color": "#c8c2b4" },
+    { "laneX": "curbWest", "roadIndex": 3, "z": 30, "heading": 180, "type": "suv", "color": "#23342c" },
+    { "laneX": "curbWest", "roadIndex": 4, "z": -100, "heading": 0, "type": "pickup", "color": "#8a4a2c" },
+    { "x": -25, "z": 57.1, "heading": 90, "type": "sports", "color": "#a32121" },
+    { "x": 48, "z": 5.1, "heading": -90, "type": "bus", "color": "#2f6b4f" },
+    { "x": -60, "z": -53.1, "heading": 90, "type": "truck", "color": "#c9c4b8" },
+    { "x": -90, "z": -42.9, "heading": 90, "type": "excavator", "color": "#d9a520" },
+    { "x": 120, "z": 57.1, "heading": -90, "type": "tractor", "color": "#2f6b3a" },
+    { "laneX": "curbEast", "roadIndex": 1, "z": 30, "heading": 180, "type": "ambulance", "color": "#f2f0e8" },
+    { "laneX": "curbEast", "roadIndex": 3, "z": -70, "heading": 0, "type": "firetruck", "color": "#c02626" },
+    { "x": -60, "z": 57.1, "heading": 90, "type": "police", "color": "#f2f0e8" },
+    { "laneX": "curbWest", "roadIndex": 4, "z": 60, "heading": 0, "type": "mixer", "color": "#d9a520" }
   ],
   "pedestrians": [
     {

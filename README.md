@@ -85,11 +85,35 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `gate` | Supported. One gate and a short approach road |
 | `trees` | Supported. Placed trees |
 | `safehouseProps` | Supported for `marker`, `hydrant`, and `trash` |
-| `vehicles` | Supported for `sedan`, `taxi`, and `van`. `driveable` marks the car the player can enter |
+| `vehicles` | 15 vehicle types are supported; see [Supported vehicles](#supported-vehicles). Unknown types fall back to `sedan`. `driveable` marks the car the player can enter |
 | `pedestrians` | Supported. People who walk a path, with shirt, pants, and an optional cap |
 | `bounds` | The reader accepts extra collision walls. The current map leaves this field out |
 
 A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx` / `dz`), or a `lane` (`curbNorth`, `pedSouth`, `sidewalkWest`, and so on). Vehicle and pedestrian `heading` values are degrees.
+
+## Supported vehicles
+
+Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unknown types fall back to `sedan`.
+
+| `type` | Vehicle | Notes |
+| --- | --- | --- |
+| `sedan` | Sedan | Four-door three-box car, the default; the driveable car in the current map |
+| `taxi` | Taxi | Sedan body with a roof sign |
+| `hatchback` | Hatchback | Short body with a liftback tailgate |
+| `suv` | SUV | Tall body, roof rails, larger wheels |
+| `pickup` | Pickup | Separate cab and open cargo bed |
+| `sports` | Sports car | Low body, fastback glass, rear wing |
+| `van` | Van | Tall enclosed cargo body |
+| `bus` | City bus | 10.6 m body, long side windows, two doors |
+| `truck` | Box truck | Cab-over cab, large cargo box, dual rear wheels |
+| `excavator` | Excavator | Tracks, boom, arm, and bucket |
+| `tractor` | Tractor | Large rear wheels, small front wheels, roll bar, exhaust stack |
+| `ambulance` | Ambulance | White box body, red stripe, red cross, light bar |
+| `firetruck` | Fire truck | Red body, equipment box, roof ladder, light bar, six wheels |
+| `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
+| `mixer` | Cement mixer | Tilted drum, reinforcing rings, rear discharge chute, six wheels |
+
+To add a new type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the matching `type` on an entry in `data/saint-marks.json`.
 
 ## Layout
 
@@ -101,7 +125,7 @@ A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx`
 | `src/city.js` | Reads the map and builds roads, buildings, the elevated track, and colliders |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Low-poly people, walk cycle, and the seated pose |
-| `src/vehicle.js` | Sedan, taxi, and van |
+| `src/vehicle.js` | Sedan, taxi, hatchback, SUV, pickup, sports car, van, bus, box truck, excavator, tractor, ambulance, fire truck, police car, and cement mixer |
 | `src/collision.js` | Circle collision on the ground, plus the walkable island and bridge |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
 | `src/i18n.js` | English and Chinese interface strings |

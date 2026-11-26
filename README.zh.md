@@ -85,11 +85,35 @@ npm run preview  # 预览构建结果
 | `gate` | 已支持。一座牌楼和一小段引道 |
 | `trees` | 已支持。可摆放的树 |
 | `safehouseProps` | 已支持 `marker`（存档光环）、`hydrant`（消防栓）、`trash`（垃圾桶） |
-| `vehicles` | 已支持 `sedan`（轿车）、`taxi`（出租车）、`van`（厢式车）。`driveable` 标出玩家可以开的那辆 |
+| `vehicles` | 已支持 15 种车型，详见下方[支持车型](#支持车型)。未知类型按轿车处理，`driveable` 标出玩家可以开的那辆 |
 | `pedestrians` | 已支持。沿路径走动的路人，可配上衣、裤子和帽子 |
 | `bounds` | 读取代码接受额外碰撞墙。当前地图没有填写这一项 |
 
 位置可以用绝对的 `x` / `z`，或相对安全屋门的 `dx` / `dz`，或 `lane`（`curbNorth`、`pedSouth`、`sidewalkWest` 等）。车和路人的 `heading` 用角度。
+
+## 支持车型
+
+车型由 `vehicles[].type` 指定，构建函数集中在 `src/vehicle.js`。未知的 `type` 会回退为 `sedan`。
+
+| `type` | 车型 | 说明 |
+| --- | --- | --- |
+| `sedan` | 轿车 | 四门三厢，默认车型；当前地图玩家可驾驶的那辆 |
+| `taxi` | 出租车 | 轿车车身 + 车顶灯牌 |
+| `hatchback` | 两厢车 | 短车身、掀背尾门 |
+| `suv` | SUV | 高车身、车顶行李架、大轮子 |
+| `pickup` | 皮卡 | 独立驾驶舱 + 敞开货斗 |
+| `sports` | 跑车 | 低趴车身、溜背玻璃、尾翼 |
+| `van` | 厢式车 | 高顶封闭货厢 |
+| `bus` | 公交 | 10.6 米长车身、长条侧窗、双车门 |
+| `truck` | 厢式货车 | 平头驾驶室 + 大货箱、后双轮 |
+| `excavator` | 挖掘机 | 履带底盘、动臂、斗杆、铲斗 |
+| `tractor` | 拖拉机 | 大后轮、小前轮、防滚架、排气管 |
+| `ambulance` | 救护车 | 白色厢体、红色腰线、红十字、警灯 |
+| `firetruck` | 消防车 | 红色车身、设备厢、车顶梯、警灯、六轮 |
+| `police` | 警车 | 蓝白涂装、车顶红蓝警灯 |
+| `mixer` | 水泥搅拌车 | 倾斜搅拌罐、加强环、尾部卸料溜槽、六轮 |
+
+新增车型时，在 `src/vehicle.js` 里写一个构建函数，注册到 `BUILDERS`，再在 `data/saint-marks.json` 的 `vehicles` 里填写 `type` 即可。
 
 ## 目录
 
@@ -101,7 +125,7 @@ npm run preview  # 预览构建结果
 | `src/city.js` | 读取地图数据，生成路、房子、高架和碰撞 |
 | `src/config.js` | 从地图文件导出尺寸，以及确定的随机数 |
 | `src/actor.js` | 低模人物和走路 / 坐姿 |
-| `src/vehicle.js` | 轿车、出租车、厢式车 |
+| `src/vehicle.js` | 轿车、出租车、两厢车、SUV、皮卡、跑车、厢式车、公交、厢式货车、挖掘机、拖拉机、救护车、消防车、警车、水泥搅拌车 |
 | `src/collision.js` | 水平面上的圆形碰撞，以及岛和桥的可走范围 |
 | `src/materials.js` | 砖纹和招牌（Canvas 贴图） |
 | `src/i18n.js` | 英文和中文界面文案 |

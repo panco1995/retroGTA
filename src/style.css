@@ -697,7 +697,8 @@ body.rebinding #map {
 .collection-head {
   display: flex;
   align-items: center;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 10px 20px;
   flex: none;
 }
 
@@ -711,6 +712,7 @@ body.rebinding #map {
 
 .collection-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

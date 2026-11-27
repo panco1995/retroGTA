@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { glow, solid } from './materials.js';
 import { createActor, setPose } from './actor.js';
+import { createBuilding } from './building.js';
 import { PED_KINDS } from './npc.js';
 import { createVehicle, VEHICLE_COLORS, VEHICLE_TYPES } from './vehicle.js';
 import { onLangChange, t } from './i18n.js';
@@ -131,6 +132,60 @@ const PROPS = [
   { id: 'dumpster', nameKey: 'prop_dumpster', build: buildDumpster },
 ];
 
+// One sample per kind of building the city generates. Buildings bake texture
+// copies into each house, so they are built once and cached rather than
+// rebuilt every time the list moves.
+const BUILDINGS = [
+  {
+    id: 'rowhouse',
+    nameKey: 'building_rowhouse',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 8.1, d: 10, floors: 3, face: 'south',
+      color: 0x8d5c45, fireEscape: true, seed: 311,
+    }),
+  },
+  {
+    id: 'shopfront',
+    nameKey: 'building_shopfront',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 8.2, d: 10, floors: 4, face: 'south',
+      color: 0x7c4a3e, shop: true, fireEscape: true, seed: 152,
+      sign: ['CAFE', '#1f4a3a'],
+    }),
+  },
+  {
+    id: 'watertower',
+    nameKey: 'building_watertower',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 8.6, d: 10, floors: 5, face: 'south',
+      color: 0x7a5a48, fireEscape: true, waterTower: true, seed: 153,
+    }),
+  },
+  {
+    id: 'warehouse',
+    nameKey: 'building_warehouse',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 16, d: 14, floors: 2, face: 'south',
+      color: 0x6a6e72, style: 'industrial', seed: 301,
+    }),
+  },
+  {
+    id: 'safehouse',
+    nameKey: 'building_safehouse',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 11, d: 10, floors: 3, face: 'south',
+      color: 0xc4b49a, fireEscape: true, safehouse: true, seed: 7,
+    }),
+  },
+];
+
+const builtCache = new Map();
+
 const CATEGORIES = [
   {
     id: 'vehicles',
@@ -151,6 +206,7 @@ const CATEGORIES = [
   },
   { id: 'people', labelKey: 'collectionPeople', items: PEOPLE },
   { id: 'props', labelKey: 'collectionProps', items: PROPS },
+  { id: 'buildings', labelKey: 'collectionBuildings', items: BUILDINGS },
 ];
 
 // ---- viewer state -------------------------------------------------------
@@ -284,19 +340,51 @@ function frameModel(size) {
   targetY = Math.max(0.35, size.y * 0.5);
   const plateRadius = Math.max(0.55, Math.max(size.x, size.z) * 0.62 + 0.45);
   plate.scale.set(plateRadius, 1, plateRadius);
+  // Buildings are much larger than cars, so the shadow camera follows the
+  // model instead of staying at a fixed size.
+  const shadowRadius = Math.max(4, radius * 1.3);
+  const shadowCam = keyLight.shadow.camera;
+  shadowCam.left = -shadowRadius;
+  shadowCam.right = shadowRadius;
+  shadowCam.top = shadowRadius;
+  shadowCam.bottom = -shadowRadius;
+  shadowCam.far = 40 + shadowRadius;
+  shadowCam.updateProjectionMatrix();
   updateCamera();
 }
 
-function mount(build) {
+function mount(item) {
   // Restore the outgoing model before its mesh is released.
   const keepInterior = interior;
   if (viewer?.windshield) viewer.windshield.visible = true;
   for (const child of [...pivot.children]) {
     pivot.remove(child);
-    disposeModel(child);
+    if (!child.userData.cached) disposeModel(child);
   }
 
-  const built = build();
+  const cached = item.cache ? builtCache.get(item.id) : null;
+  let built;
+  let size;
+  if (cached) {
+    built = cached.group;
+    size = cached.size;
+  } else {
+    built = item.build();
+    const group = built.isObject3D ? built : built.group;
+    group.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(group);
+    size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    // Sit the model on the plate and spin it about its own centre.
+    group.position.x -= center.x;
+    group.position.z -= center.z;
+    group.position.y -= box.min.y;
+    if (item.cache) {
+      group.userData.cached = true;
+      builtCache.set(item.id, { group, size });
+    }
+  }
+
   const group = built.isObject3D ? built : built.group;
   // Only vehicles carry a seat and a windshield; a cab with glass gets the
   // interior view, while the open tractors and the like do not.
@@ -304,14 +392,6 @@ function mount(build) {
     ? { group, seat: null, windshield: null }
     : { group, seat: built.seat ?? null, windshield: built.windshield ?? null };
 
-  group.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(group);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  // Sit the model on the plate and spin it about its own centre.
-  group.position.x -= center.x;
-  group.position.z -= center.z;
-  group.position.y -= box.min.y;
   pivot.add(group);
 
   interior = false;
@@ -451,7 +531,7 @@ function select(next) {
   index = ((next % items.length) + items.length) % items.length;
   updateSelection();
   updateCaption();
-  mount(items[index].build);
+  mount(items[index]);
 }
 
 function openPanel() {

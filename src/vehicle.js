@@ -1149,32 +1149,6 @@ function buildExcavator(group, color) {
   return { wheels: [], tails: [], length: 7.0, width: 2.7, radius: 3.6 };
 }
 
-function buildTractor(group, color) {
-  const paint = solid(color, 0.6, 0.08);
-  const dark = solid(0x1a1c1e, 0.7, 0.15);
-  const steel = solid(0x6d7275, 0.5, 0.3);
-  part(group, 1.0, 0.55, 2.8, paint, 0, 1.0, 0);
-  part(group, 0.95, 0.45, 1.5, paint, 0, 1.35, 0.9);
-  part(group, 0.9, 0.1, 1.5, dark, 0, 1.6, 0.9);
-  part(group, 1.15, 0.55, 0.7, paint, 0, 1.55, -0.35);
-  part(group, 0.5, 0.6, 0.15, dark, 0, 1.95, -0.65);
-  beam(group, [-0.5, 1.7, -0.7], [-0.5, 2.5, -0.7], 0.1, steel);
-  beam(group, [0.5, 1.7, -0.7], [0.5, 2.5, -0.7], 0.1, steel);
-  beam(group, [-0.5, 2.5, -0.7], [0.5, 2.5, -0.7], 0.1, steel);
-  beam(group, [0.3, 1.55, 1.2], [0.3, 2.2, 1.2], 0.09, dark);
-  part(group, 0.2, 0.3, 1.6, paint, -0.88, 1.1, -0.5);
-  part(group, 0.2, 0.3, 1.6, paint, 0.88, 1.1, -0.5);
-  part(group, 0.16, 0.16, 0.06, glow(0xfff1cc, 0.7), -0.3, 1.35, 1.66);
-  part(group, 0.16, 0.16, 0.06, glow(0xfff1cc, 0.7), 0.3, 1.35, 1.66);
-  const wheels = [
-    addWheel(group, -0.78, wheelY(1.55), -0.75, false, 1.55),
-    addWheel(group, 0.78, wheelY(1.55), -0.75, false, 1.55),
-    addWheel(group, -0.62, wheelY(0.8), 1.15, true, 0.8),
-    addWheel(group, 0.62, wheelY(0.8), 1.15, true, 0.8),
-  ];
-  return { wheels, tails: [], length: 3.6, width: 1.9, radius: 1.5 };
-}
-
 function buildAmbulance(group, color) {
   const paint = solid(color, 0.5, 0.1);
   const red = solid(0xc22a2a, 0.45, 0.1);
@@ -1377,7 +1351,6 @@ const BUILDERS = {
   bus: buildBus,
   truck: buildTruck,
   excavator: buildExcavator,
-  tractor: buildTractor,
   ambulance: buildAmbulance,
   firetruck: buildFireTruck,
   police: buildPolice,
@@ -1399,7 +1372,6 @@ export const VEHICLE_COLORS = {
   bus: 0x2f6b4f,
   truck: 0xc9c4b8,
   excavator: 0xd9a520,
-  tractor: 0x2f6b3a,
   ambulance: 0xf2f0e8,
   firetruck: 0xc02626,
   police: 0xf2f0e8,

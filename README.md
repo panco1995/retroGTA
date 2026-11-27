@@ -26,7 +26,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
 - Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
-- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, five street props, and six building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
+- Collection gallery: all 14 vehicles, the 12 pedestrian kinds, five street props, and six building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -72,7 +72,7 @@ The round radar at the bottom left shows the area around the player and rotates 
 
 The main menu and the pause menu both have a Collection page. It is a full-screen gallery with four tabs:
 
-- **Vehicles** — all 15 vehicle types, in the same paint as the cheat menu
+- **Vehicles** — all 14 vehicle types, in the same paint as the cheat menu
 - **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
 - **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster
 - **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, and the safehouse, all from the city's shared building builder
@@ -110,7 +110,7 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `gate` | One gate and a short approach road |
 | `trees` | Placed trees |
 | `safehouseProps` | `hydrant` and `trash` |
-| `vehicles` | 15 types; see [Vehicles](#vehicles). Unknown types fall back to `sedan`. Every parked vehicle can be entered; `driveable` marks the car the player starts next to. Ambient traffic can be carjacked too |
+| `vehicles` | 14 types; see [Vehicles](#vehicles). Unknown types fall back to `sedan`. Every parked vehicle can be entered; `driveable` marks the car the player starts next to. Ambient traffic can be carjacked too |
 | `pedestrians` | Fixed people who walk a path, with shirt, pants, and an optional cap. Separate from the runtime crowd; see [Pedestrians](#pedestrians) |
 | `bounds` | The reader accepts extra collision walls. The current map leaves this field out |
 
@@ -132,7 +132,6 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 | `bus` | City bus | 10.6 m body, long side windows |
 | `truck` | Box truck | Cab-over cab, large cargo box, dual rear wheels |
 | `excavator` | Excavator | Tracks, boom, arm, and bucket |
-| `tractor` | Tractor | Large rear wheels, small front wheels, roll bar, exhaust stack |
 | `ambulance` | Ambulance | White box body, red stripe, red cross, light bar |
 | `firetruck` | Fire truck | Red body, equipment box, roof ladder, light bar, six wheels |
 | `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
@@ -183,7 +182,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
+| `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
 | `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |

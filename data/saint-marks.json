@@ -136,7 +136,6 @@
     { "x": 48, "z": 5.1, "heading": -90, "type": "bus", "color": "#2f6b4f" },
     { "x": -60, "z": -53.1, "heading": 90, "type": "truck", "color": "#c9c4b8" },
     { "x": -90, "z": -42.9, "heading": 90, "type": "excavator", "color": "#d9a520" },
-    { "x": 120, "z": 57.1, "heading": -90, "type": "tractor", "color": "#2f6b3a" },
     { "laneX": "curbEast", "roadIndex": 1, "z": 30, "heading": 180, "type": "ambulance", "color": "#f2f0e8" },
     { "laneX": "curbEast", "roadIndex": 3, "z": -70, "heading": 0, "type": "firetruck", "color": "#c02626" },
     { "x": -60, "z": 57.1, "heading": 90, "type": "police", "color": "#f2f0e8" },

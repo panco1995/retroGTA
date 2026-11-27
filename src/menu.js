@@ -44,9 +44,6 @@ export function showPage(menu, page) {
     root(name).classList.toggle('menu-sub', name === menu && page !== 'home');
   }
 
-  // The game's title and author belong to the main menu's home page only.
-  document.getElementById('menu-brand').hidden = !(menu === 'menu' && page === 'home');
-
   // Every menu page shares one footer back button, so it always sits in the
   // same spot; the full-screen map brings its own.
   document.getElementById('menu-back').hidden = !(menu === 'menu' && page !== 'home');

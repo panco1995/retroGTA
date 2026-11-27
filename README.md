@@ -47,7 +47,7 @@ make single      # one file, dist/retrogta.html
 
 ## Controls
 
-Choose Start on the main menu. In the follow and first-person cameras, move the mouse to look around. First person applies on foot; while driving the camera stays behind the car. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
+Choose Start on the main menu. In the follow and first-person cameras, move the mouse to look around. First person works on foot and from the driver's seat, where the view follows the car as it turns. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
 
 Rebind keys in Settings → Controls → Keyboard, in either menu: click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses. The camera can also be picked directly in Settings → View; it stays in sync with the V key.
 

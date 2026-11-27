@@ -503,6 +503,25 @@ export function createVehicle(cfg) {
   const group = new THREE.Group();
   const type = cfg.type in BUILDERS ? cfg.type : 'sedan';
   const built = BUILDERS[type](group, cfg.color, type === 'taxi');
+  // The front-most glass pane is the windshield. From a camera inside the
+  // cabin it would block the view, so it can be hidden for first person.
+  const glassParts = [];
+  group.traverse((obj) => {
+    if (obj.isMesh && obj.material?.color?.getHex() === 0x141c22) glassParts.push(obj);
+  });
+  glassParts.sort((a, b) => b.position.z - a.position.z);
+  const windshield = glassParts[0] ?? null;
+  let seat;
+  if (windshield) {
+    seat = {
+      x: windshield.position.x === 0 ? -0.36 : windshield.position.x,
+      y: windshield.position.y,
+      z: windshield.position.z - 0.8,
+    };
+  } else {
+    const box = new THREE.Box3().setFromObject(group);
+    seat = { x: -0.36, y: Math.min(2.6, box.max.y - 0.4), z: Math.min(0.1, built.length / 2 - 1.2) };
+  }
   const state = {
     group,
     type,
@@ -518,6 +537,8 @@ export function createVehicle(cfg) {
     radius: built.radius,
     wheels: built.wheels,
     tails: built.tails,
+    windshield,
+    seat,
     inUse: false,
     _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     sync() {

@@ -205,7 +205,12 @@ export function createGame(canvas) {
 
   function setView(next) {
     view = next;
-    if (next !== 'first') pitch = THREE.MathUtils.clamp(pitch, -0.15, 1.05);
+    if (next === 'first' && mode === 'drive' && hero) {
+      yaw = hero.heading;
+      pitch = 0.06;
+    } else if (next !== 'first') {
+      pitch = THREE.MathUtils.clamp(pitch, -0.15, 1.05);
+    }
     syncViewOptions();
   }
 
@@ -807,6 +812,10 @@ export function createGame(canvas) {
     player.group.rotation.set(0, 0, 0);
     setPose(player, 'sit');
     hero.speed = 0;
+    if (view === 'first') {
+      yaw = hero.heading;
+      pitch = 0.06;
+    }
     input.release();
   }
 
@@ -1028,6 +1037,13 @@ export function createGame(canvas) {
       hero.heading += steerInput * 1.45 * speedFactor * high * (hero.speed >= 0 ? 1 : -1) * dt;
     }
     hero.steer = steerInput * 0.38;
+    // Keep the first-person view pointed down the road; mouse look drifts back.
+    if (view === 'first' && Math.abs(hero.speed) > 0.4) {
+      let delta = hero.heading - yaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      yaw += delta * (1 - Math.pow(0.12, dt));
+    }
 
     const vx = Math.sin(hero.heading) * hero.speed;
     const vz = Math.cos(hero.heading) * hero.speed;
@@ -1152,7 +1168,7 @@ export function createGame(canvas) {
   }
 
   function viewLabel() {
-    if (view === 'first' && mode === 'foot') return t('viewFirst');
+    if (view === 'first') return t('viewFirst');
     if (view === 'top') return t('viewTop');
     if (view === 'iso') return t('viewIso');
     return t('viewFollow');
@@ -1167,8 +1183,11 @@ export function createGame(canvas) {
     let camPitch = pitch;
     let dist = driving ? 10.5 : started ? 6.4 : 12.5;
     let lookY = (driving ? 1.15 : started ? 1.35 : 4.2) + gy;
-    // The character would fill the first-person view.
-    player.group.visible = !(started && mode === 'foot' && view === 'first');
+    // The character and the windshield would fill the first-person view.
+    player.group.visible = !(started && view === 'first');
+    if (hero?.windshield) {
+      hero.windshield.visible = !(started && mode === 'drive' && view === 'first');
+    }
     if (!started) {
       camera.up.set(0, 1, 0);
     } else if (view === 'first' && mode === 'foot') {
@@ -1186,6 +1205,26 @@ export function createGame(canvas) {
       camera.lookAt(look);
       sun.position.set(player.x + 36, 64, player.z + 22);
       sun.target.position.set(player.x, 0, player.z);
+      sun.target.updateMatrixWorld();
+      return;
+    } else if (view === 'first' && mode === 'drive') {
+      // Driver's seat: the cabin shell culls from inside, the windshield is
+      // hidden, so the view looks out over the hood.
+      camera.up.set(0, 1, 0);
+      hero.group.updateMatrixWorld();
+      desired.set(hero.seat.x, hero.seat.y, hero.seat.z);
+      hero.group.localToWorld(desired);
+      camera.position.copy(desired);
+      camReady = true;
+      const cp = Math.cos(pitch);
+      look.set(
+        desired.x + Math.sin(yaw) * cp * 4,
+        desired.y - Math.sin(pitch) * 4,
+        desired.z + Math.cos(yaw) * cp * 4,
+      );
+      camera.lookAt(look);
+      sun.position.set(hero.x + 36, 64, hero.z + 22);
+      sun.target.position.set(hero.x, 0, hero.z);
       sun.target.updateMatrixWorld();
       return;
     } else if (view === 'top') {

@@ -186,6 +186,7 @@ export function createGame(canvas) {
     camera,
     getFocus: () => (mode === 'drive' ? hero : player),
     getTarget: () => approach?.vehicle ?? null,
+    onImpact: (a, b) => bounceVehicles(a, b),
   });
 
   const speedEl = document.getElementById('speed');
@@ -597,12 +598,60 @@ export function createGame(canvas) {
     }
   }
 
+  function vehicleVelocity(vehicle) {
+    if (vehicle.traffic || (vehicle === hero && mode === 'drive')) {
+      return [
+        Math.sin(vehicle.heading) * (vehicle.speed || 0),
+        Math.cos(vehicle.heading) * (vehicle.speed || 0),
+      ];
+    }
+    return [vehicle.knockVX || 0, vehicle.knockVZ || 0];
+  }
+
+  // Apply a velocity change to any kind of car: the hero and traffic only
+  // travel along their heading, free cars keep a world-space knock velocity.
+  function applyBounce(vehicle, ix, iz) {
+    const fx = Math.sin(vehicle.heading);
+    const fz = Math.cos(vehicle.heading);
+    const along = ix * fx + iz * fz;
+    if (vehicle === hero && mode === 'drive') {
+      vehicle.speed += along;
+    } else if (vehicle.traffic) {
+      vehicle.speed = THREE.MathUtils.clamp(vehicle.speed + along, 0, 14);
+      vehicle.shoveX = THREE.MathUtils.clamp(
+        vehicle.shoveX + (ix - fx * along) * 0.12, -1.2, 1.2,
+      );
+      vehicle.shoveZ = THREE.MathUtils.clamp(
+        vehicle.shoveZ + (iz - fz * along) * 0.12, -1.2, 1.2,
+      );
+    } else {
+      vehicle.knockVX += ix;
+      vehicle.knockVZ += iz;
+    }
+  }
+
+  // Two cars that touch exchange momentum along the line between them.
+  function bounceVehicles(a, b) {
+    const dx = a.x - b.x;
+    const dz = a.z - b.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const nx = dx / dist;
+    const nz = dz / dist;
+    const [avx, avz] = vehicleVelocity(a);
+    const [bvx, bvz] = vehicleVelocity(b);
+    const closing = (avx - bvx) * nx + (avz - bvz) * nz;
+    if (closing >= -0.3) return;
+    const impulse = (-closing * a.mass * b.mass) / (a.mass + b.mass);
+    applyBounce(a, nx * (impulse / a.mass), nz * (impulse / a.mass));
+    applyBounce(b, -nx * (impulse / b.mass), -nz * (impulse / b.mass));
+  }
+
   // Parked and free cars slide from an impact, slowing on friction and
   // stopping against walls or other cars.
   const knockCols = [];
   function knockCars(dt) {
     for (const vehicle of world.vehicles) {
-      if (vehicle === hero || vehicle.traffic) continue;
+      if (vehicle.traffic || (vehicle === hero && mode === 'drive')) continue;
       const vx = vehicle.knockVX;
       const vz = vehicle.knockVZ;
       const spin = vehicle.knockSpin;
@@ -614,17 +663,25 @@ export function createGame(canvas) {
       for (const c of world.colliders) {
         if (c !== vehicle._aabb) knockCols.push(c);
       }
+      // The driven car is not a static collider, so add it back for slides.
+      if (hero && hero !== vehicle && !knockCols.includes(hero.collider())) {
+        knockCols.push(hero.collider());
+      }
       const nx = vehicle.x + vx * dt;
       if (!vehicleBlocked(nx, vehicle.z, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
         vehicle.x = nx;
       } else {
-        vehicle.knockVX = -vx * 0.25;
+        const other = hitVehicleAt(vehicle, nx, vehicle.z);
+        if (other) bounceVehicles(vehicle, other);
+        else vehicle.knockVX = -vx * 0.25;
       }
       const nz = vehicle.z + vz * dt;
       if (!vehicleBlocked(vehicle.x, nz, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
         vehicle.z = nz;
       } else {
-        vehicle.knockVZ = -vz * 0.25;
+        const other = hitVehicleAt(vehicle, vehicle.x, nz);
+        if (other) bounceVehicles(vehicle, other);
+        else vehicle.knockVZ = -vz * 0.25;
       }
       vehicle.heading += spin * dt;
       const damp = Math.exp(-2.4 * dt);

@@ -66,7 +66,7 @@ function headingAt(loop, distance, ahead = 2.2) {
 }
 
 export function createTraffic({
-  scene, world, camera, getFocus, getTarget,
+  scene, world, camera, getFocus, getTarget, onImpact,
 }) {
   const loops = world.trafficLoops ?? [];
   const slots = [];
@@ -235,7 +235,7 @@ export function createTraffic({
     return false;
   }
 
-  function hitsVehicle(vehicle, x, z, heading) {
+  function blockingVehicle(vehicle, x, z, heading) {
     const halfL = vehicle.length / 2;
     const halfW = vehicle.width / 2;
     for (let i = 0; i < world.vehicles.length; i++) {
@@ -245,9 +245,9 @@ export function createTraffic({
       if (obbHitsObb(
         x, z, heading, halfL, halfW,
         box.x, box.z, box.heading, box.halfL, box.halfW,
-      )) return true;
+      )) return other;
     }
-    return false;
+    return null;
   }
 
   function drive(slot, dt, carjackTarget) {
@@ -277,9 +277,11 @@ export function createTraffic({
     const heading = headingAt(loop, nextS);
     // The path is a rail, so stop before driving into another car.
     // People are not a wall: a moving car runs them over.
-    const enteredCar = hitsVehicle(vehicle, point.x, point.z, heading)
-      && !hitsVehicle(vehicle, vehicle.x, vehicle.z, vehicle.heading);
+    const blocker = blockingVehicle(vehicle, point.x, point.z, heading);
+    const enteredCar = blocker
+      && !blockingVehicle(vehicle, vehicle.x, vehicle.z, vehicle.heading);
     if (enteredCar) {
+      if (onImpact) onImpact(vehicle, blocker);
       vehicle.speed = Math.max(0, vehicle.speed - 14 * dt);
       vehicle.braking = vehicle.speed > 0.15;
       vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);

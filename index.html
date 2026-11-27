@@ -26,10 +26,11 @@
     </div>
 
     <div id="menu">
-      <div class="menu-card">
-        <div class="boot-kicker" data-i18n="bootKicker"></div>
+      <div id="menu-brand" class="menu-brand">
         <div class="boot-title">retroGTA</div>
         <div class="menu-author" data-i18n="menuAuthor"></div>
+      </div>
+      <div class="menu-card">
         <nav id="menu-home" class="menu-list">
           <button type="button" id="menu-start" data-i18n="menuStart"></button>
           <button type="button" data-page="settings" data-i18n="menuSettings"></button>
@@ -38,27 +39,26 @@
         <section id="menu-about" class="menu-panel" hidden>
           <p class="about-copy" data-i18n="aboutCopy"></p>
           <p class="boot-keys" id="boot-keys"></p>
-          <button type="button" class="menu-back" data-page="home" data-i18n="menuBack"></button>
         </section>
         <!-- Shared by the main menu and the pause menu; moved into whichever card opens it. -->
         <section id="settings-panel" class="menu-panel" hidden>
-          <nav id="settings-home" class="menu-list">
-            <button type="button" data-page="language" data-i18n="language"></button>
-            <button type="button" data-page="controls" data-i18n="controls"></button>
-          </nav>
-          <section id="settings-language-page" class="settings-page" hidden>
+          <section id="settings-home" class="settings-page">
             <div class="settings-label" data-i18n="language"></div>
-            <div id="lang-options" role="group"></div>
-            <button type="button" class="menu-back" data-page="settings" data-i18n="menuBack"></button>
+            <div id="lang-options" class="option-group" role="group"></div>
+            <div class="settings-label settings-heading" data-i18n="view"></div>
+            <div id="view-options" class="option-group" role="group"></div>
+            <div class="settings-label settings-heading" data-i18n="controls"></div>
+            <div class="option-group">
+              <button type="button" data-page="controls" data-i18n="controlsKeyboard"></button>
+            </div>
           </section>
           <section id="settings-controls-page" class="settings-page" hidden>
-            <div class="settings-label" data-i18n="controls"></div>
+            <div class="settings-label" data-i18n="keyboardBindings"></div>
             <div id="controls"></div>
             <button type="button" id="controls-reset" class="controls-reset" data-i18n="controlsReset"></button>
-            <button type="button" class="menu-back" data-page="settings" data-i18n="menuBack"></button>
           </section>
-          <button type="button" id="settings-back" class="menu-back" data-page="home" data-i18n="menuBack"></button>
         </section>
+        <button type="button" id="menu-back" class="menu-back" data-page="back" data-i18n="menuBack" hidden></button>
       </div>
     </div>
 
@@ -81,8 +81,8 @@
           </label>
           <button type="button" id="cheat-spawn" class="controls-reset" data-i18n="cheatSpawnButton"></button>
           <p id="cheat-status" class="cheat-status"></p>
-          <button type="button" class="menu-back" data-page="home" data-i18n="menuBack"></button>
         </section>
+        <button type="button" id="pause-back" class="menu-back" data-page="back" data-i18n="menuBack" hidden></button>
       </div>
       <section id="pause-map-panel" class="menu-panel pause-map-panel" hidden>
         <div class="pause-map-heading" data-i18n="pauseMap"></div>

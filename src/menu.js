@@ -9,10 +9,10 @@ const PAGES = {
   pause: { cheats: 'pause-cheats-panel', map: 'pause-map-panel' },
 };
 
-// Pages inside the shared settings panel, drilled down in this order.
+// Pages inside the shared settings panel. Language and view are picked
+// directly on the settings page; only the key bindings drill down.
 const SETTINGS_PAGES = {
   settings: 'settings-home',
-  language: 'settings-language-page',
   controls: 'settings-controls-page',
 };
 
@@ -41,17 +41,27 @@ export function showPage(menu, page) {
     for (const id of Object.values(PAGES[name])) {
       document.getElementById(id).hidden = true;
     }
+    root(name).classList.toggle('menu-sub', name === menu && page !== 'home');
   }
+
+  // The game's title and author belong to the main menu's home page only.
+  document.getElementById('menu-brand').hidden = !(menu === 'menu' && page === 'home');
+
+  // Every menu page shares one footer back button, so it always sits in the
+  // same spot; the full-screen map brings its own.
+  document.getElementById('menu-back').hidden = !(menu === 'menu' && page !== 'home');
+  document.getElementById('pause-back').hidden = !(
+    menu === 'pause' && page !== 'home' && page !== 'map'
+  );
 
   const panel = document.getElementById('settings-panel');
   const inSettings = Object.hasOwn(SETTINGS_PAGES, page);
   panel.hidden = !inSettings;
   if (inSettings) {
-    card(menu).append(panel);
+    card(menu).insertBefore(panel, document.getElementById(`${menu}-back`));
     for (const [name, id] of Object.entries(SETTINGS_PAGES)) {
       document.getElementById(id).hidden = name !== page;
     }
-    document.getElementById('settings-back').hidden = page !== 'settings';
   }
   document.body.classList.toggle('rebinding', page === 'controls');
 
@@ -73,7 +83,7 @@ export function currentPage() {
 // Steps one level up inside the menus. Returns false when already at the
 // menu home, so the caller can close the menu itself.
 export function backPage() {
-  if (current.page === 'language' || current.page === 'controls') {
+  if (current.page === 'controls') {
     showPage(current.menu, 'settings');
     return true;
   }
@@ -99,7 +109,8 @@ export function initMenu() {
     const menu = trigger.closest('#menu, #pause');
     if (!menu) return;
     event.preventDefault();
-    showPage(menu.id, trigger.dataset.page);
+    if (trigger.dataset.page === 'back') backPage();
+    else showPage(menu.id, trigger.dataset.page);
   });
 
   // The pause menu's Escape handling lives in game.js; this only backs out of

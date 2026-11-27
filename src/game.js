@@ -14,6 +14,9 @@ import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseH
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
 
+const VIEW_ORDER = ['follow', 'top', 'iso'];
+const VIEW_LABELS = { follow: 'viewFollow', top: 'viewTop', iso: 'viewIso' };
+
 const ENTER_RANGE = 20;
 // The prompt only appears when the player is close, even though pressing the
 // interact key can still walk to a car from further away.
@@ -184,6 +187,34 @@ export function createGame(canvas) {
   const cheatStatus = document.getElementById('cheat-status');
   const mapPanel = document.getElementById('pause-map-panel');
   const mapCanvas = document.getElementById('pause-map-canvas');
+  const viewOptionsEl = document.getElementById('view-options');
+
+  function syncViewOptions() {
+    viewOptionsEl.querySelectorAll('[data-view]').forEach((el) => {
+      el.textContent = t(VIEW_LABELS[el.dataset.view]);
+      el.setAttribute('aria-pressed', el.dataset.view === view ? 'true' : 'false');
+    });
+  }
+
+  function setView(next) {
+    view = next;
+    syncViewOptions();
+  }
+
+  function mountViewOptions() {
+    viewOptionsEl.replaceChildren();
+    for (const name of VIEW_ORDER) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.view = name;
+      button.addEventListener('click', () => {
+        setView(name);
+        if (name !== 'follow') document.exitPointerLock();
+      });
+      viewOptionsEl.append(button);
+    }
+    syncViewOptions();
+  }
 
   function placeOnFoot(actor, x, z, heading) {
     actor.x = x;
@@ -364,7 +395,7 @@ export function createGame(canvas) {
       setPose(player, 'stand');
     }
     mode = 'foot';
-    view = 'follow';
+    setView('follow');
     approach = null;
     player.jumpY = 0;
     player.jumpV = 0;
@@ -1249,8 +1280,10 @@ export function createGame(canvas) {
 
   onLangChange(updateHud);
   onLangChange(fillCheatVehicles);
+  onLangChange(syncViewOptions);
   onBindingsChange(updateHud);
   fillCheatVehicles();
+  mountViewOptions();
 
   function drawPauseMap() {
     if (mapPanel.hidden) return;
@@ -1291,7 +1324,7 @@ export function createGame(canvas) {
     yaw = player.heading;
     pitch = 0.3;
     input.release();
-    input.lock();
+    if (view === 'follow') input.lock();
   });
 
   document.getElementById('pause-resume').addEventListener('click', () => closePause());
@@ -1356,7 +1389,7 @@ export function createGame(canvas) {
     if (hintTime > 0) hintTime = Math.max(0, hintTime - dt);
 
     if (started && input.consume('camera')) {
-      view = view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow';
+      setView(view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow');
       if (view !== 'follow') document.exitPointerLock();
     }
     if (started) input.setAim(view === 'follow');

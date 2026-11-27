@@ -36,10 +36,16 @@ const ENTER_RANGE = 20;
 // interact key can still walk to a car from further away.
 const PROMPT_RANGE = 5.5;
 const JUMP_SPEED = 7.4;
-// A moving car is much heavier than a person. Creeping still shoves them
-// over; road speed runs them over. A stopped car stays solid.
-const KNOCK_SPEED = 1.8;
-const KILL_SPEED = 6;
+// A moving car is much heavier than a person: touches below BUMP_SPEED just
+// nudge them aside, faster hits go through the momentum model and scale the
+// knockdown (and death) chance by the impact and the car's mass.
+const BUMP_SPEED = 1.6;
+const DOWN_SPEED = 4;
+const KILL_SPEED = 13;
+const PERSON_MASS = 1;
+// People are a narrower target than the painted body, so grazing the door
+// does not count as a hit.
+const PERSON_HIT_INSET = 0.12;
 const GRAVITY = 24;
 const ATTACK_RANGE = 1.9;
 
@@ -437,6 +443,9 @@ export function createGame(canvas) {
     player.down = 0;
     player.dead = false;
     player.bleed = 0;
+    player.hitVX = 0;
+    player.hitVZ = 0;
+    player.hitCool = 0;
     setPose(player, 'stand');
     blood.reset();
     removeCheatVehicles();
@@ -481,6 +490,9 @@ export function createGame(canvas) {
       ped.down = 0;
       ped.dead = false;
       ped.bleed = 0;
+      ped.hitVX = 0;
+      ped.hitVZ = 0;
+      ped.hitCool = 0;
       placeOnFoot(ped, home.x, home.z, home.heading);
       setPose(ped, 'stand');
     });
@@ -736,7 +748,8 @@ export function createGame(canvas) {
       for (let i = 0; i < world.vehicles.length; i++) {
         const vehicle = world.vehicles[i];
         if (vehicle === ignore || vehicle.group.visible === false) continue;
-        if (Math.abs(vehicle.speed || 0) >= KNOCK_SPEED) continue;
+        const [vvx, vvz] = vehicleVelocity(vehicle);
+        if (Math.hypot(vvx, vvz) >= BUMP_SPEED) continue;
         const exits = circleExitsFromObb(
           x,
           z,
@@ -809,13 +822,26 @@ export function createGame(canvas) {
     player.airborne = false;
     player.jumpY = 0;
     player.jumpV = 0;
+    player.hitVX = 0;
+    player.hitVZ = 0;
+    player.hitCool = 0;
     approach = null;
     setPose(player, 'stand');
     placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
     flash = { text: t('wasted'), timer: 2.4 };
   }
 
-  // The car keeps going. A hard hit kills; a slow shove only knocks them flat.
+  function endChat(body) {
+    if (!body.chatPartner) return;
+    const partner = body.chatPartner;
+    body.chatPartner = null;
+    body.idle = 0;
+    if (partner.chatPartner === body) partner.chatPartner = null;
+  }
+
+  // A car transfers momentum to whoever it touches: the person is launched
+  // along the car's travel direction by the closing speed, and the outcome
+  // (nudge, knockdown or death) scales with the impact and the car's mass.
   function crushPeople(dt) {
     staticCols.length = 0;
     for (let i = 0; i < world.colliders.length; i += 1) {
@@ -825,58 +851,69 @@ export function createGame(canvas) {
     for (let v = 0; v < world.vehicles.length; v += 1) {
       const vehicle = world.vehicles[v];
       if (vehicle.group.visible === false) continue;
-      const speed = Math.abs(vehicle.speed || 0);
-      if (speed < KNOCK_SPEED) continue;
-      const dir = Math.sign(vehicle.speed) || 1;
-      const fx = Math.sin(vehicle.heading) * dir;
-      const fz = Math.cos(vehicle.heading) * dir;
-      const halfL = vehicle.length / 2;
-      const halfW = vehicle.width / 2;
-      const fatal = speed >= KILL_SPEED;
+      const [vx, vz] = vehicleVelocity(vehicle);
+      const carSpeed = Math.hypot(vx, vz);
+      if (carSpeed < BUMP_SPEED) continue;
+      const dirX = vx / carSpeed;
+      const dirZ = vz / carSpeed;
+      const halfL = Math.max(0.6, vehicle.length / 2 - PERSON_HIT_INSET);
+      const halfW = Math.max(0.6, vehicle.width / 2 - PERSON_HIT_INSET);
       let slowed = false;
       for (let p = 0; p < people.length; p += 1) {
         const { body, actor, radius } = people[p];
+        if ((body.hitCool || 0) > 0) continue;
         if (!obbHitsCircle(vehicle.x, vehicle.z, vehicle.heading, halfL, halfW, body.x, body.z, radius)) {
           continue;
         }
+        const dx = body.x - vehicle.x;
+        const dz = body.z - vehicle.z;
+        const dist = Math.hypot(dx, dz) || 1;
+        // Glancing hits still move the person, just less than head-on ones.
+        const along = Math.max(0.4, (dx / dist) * dirX + (dz / dist) * dirZ);
+        const impact = carSpeed * along;
+        if (impact < BUMP_SPEED) continue;
+        const severity = impact * Math.sqrt(vehicle.mass / 8);
+        const impulse = impact * (vehicle.mass / (vehicle.mass + PERSON_MASS)) * 0.7;
+        body.hitVX = dirX * Math.min(12, impulse / PERSON_MASS);
+        body.hitVZ = dirZ * Math.min(12, impulse / PERSON_MASS);
+        body.hitCool = 0.35;
+        body.heading = Math.atan2(dirX, dirZ);
         if (body === player) {
           body.jumpY = 0;
           body.jumpV = 0;
           body.airborne = false;
         }
-        const shove = Math.min(speed, 12) * dt * 0.95;
-        const next = moveCircle(body.x, body.z, fx * shove, fz * shove, radius, staticCols);
-        body.x = next.x;
-        body.z = next.z;
-        body.heading = Math.atan2(fx, fz);
+        if (!slowed) {
+          slowed = true;
+          const loss = severity >= KILL_SPEED ? 0.85 : 0.94;
+          if (vehicle.traffic || (vehicle === hero && mode === 'drive')) {
+            vehicle.speed *= loss;
+          } else {
+            vehicle.knockVX *= loss;
+            vehicle.knockVZ *= loss;
+          }
+        }
         const y = world.ground(body.x, body.z);
         if (body.dead) {
           if ((body.bleed || 0) <= 0) {
             blood.spill(body.x, body.z, y, true);
             body.bleed = 0.45;
           }
-        } else if (fatal || !(body.down > 0)) {
-          if (fatal) {
+        } else {
+          if (severity >= KILL_SPEED) {
             body.dead = true;
             body.down = body === player ? 3.6 : 1;
-          } else {
-            body.down = 6.5;
+          } else if (severity >= DOWN_SPEED) {
             body.dead = false;
+            body.down = 6.5;
           }
-          if (actor.pose !== 'down') setPose(actor, 'down');
-          if (body.chatPartner) {
-            const partner = body.chatPartner;
-            body.chatPartner = null;
-            body.idle = 0;
-            if (partner.chatPartner === body) partner.chatPartner = null;
+          if (severity >= DOWN_SPEED) {
+            if (actor.pose !== 'down') setPose(actor, 'down');
+            endChat(body);
+            blood.spill(body.x, body.z, y, severity >= KILL_SPEED);
+            body.bleed = severity >= KILL_SPEED ? 0.3 : 0.65;
+            if (body === player) approach = null;
           }
-          blood.spill(body.x, body.z, y, fatal);
-          body.bleed = fatal ? 0.3 : 0.65;
-          if (!slowed) {
-            vehicle.speed *= fatal ? 0.93 : 0.78;
-            slowed = true;
-          }
-          if (body === player) approach = null;
         }
         syncPerson(body, actor);
       }
@@ -925,6 +962,25 @@ export function createGame(canvas) {
     const people = eachPerson();
     for (let i = 0; i < people.length; i += 1) {
       const { body, actor } = people[i];
+      if (body.hitCool > 0) body.hitCool = Math.max(0, body.hitCool - dt);
+      const hvx = body.hitVX || 0;
+      const hvz = body.hitVZ || 0;
+      if (Math.abs(hvx) > 0.05 || Math.abs(hvz) > 0.05) {
+        const next = moveCircle(
+          body.x, body.z, hvx * dt, hvz * dt,
+          body.radius || 0.36, staticCols,
+        );
+        body.x = next.x;
+        body.z = next.z;
+        const damp = Math.exp(-3.4 * dt);
+        body.hitVX = hvx * damp;
+        body.hitVZ = hvz * damp;
+        if (Math.hypot(body.hitVX, body.hitVZ) < 0.12) {
+          body.hitVX = 0;
+          body.hitVZ = 0;
+        }
+        syncPerson(body, actor);
+      }
       if (!body.dead && !(body.down > 0)) continue;
       if (body.bleed > 0) body.bleed -= dt;
       else {
@@ -1266,15 +1322,15 @@ export function createGame(canvas) {
   function threatAt(x, z) {
     for (const vehicle of world.vehicles) {
       const speed = Math.abs(vehicle.speed ?? 0);
-      if (speed < 3) continue;
+      if (speed < 2.5) continue;
       const dx = x - vehicle.x;
       const dz = z - vehicle.z;
-      if (Math.hypot(dx, dz) > 5.5) continue;
+      if (Math.hypot(dx, dz) > 6.5) continue;
       const dir = Math.sign(vehicle.speed) || 1;
       const fx = Math.sin(vehicle.heading) * dir;
       const fz = Math.cos(vehicle.heading) * dir;
       if (dx * fx + dz * fz <= 0.1) continue;
-      if (Math.abs(dx * fz - dz * fx) > 2.8) continue;
+      if (Math.abs(dx * fz - dz * fx) > 3.1) continue;
       return vehicle;
     }
     return null;

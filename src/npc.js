@@ -18,9 +18,9 @@ const MIN_SPACING = 2.4;
 // jump aside when a car heads straight for someone on the pavement.
 const CROSS_LOOK = 18;
 const CROSS_PATIENCE = 4;
-const PANIC_RANGE = 5.5;
+const PANIC_RANGE = 6.5;
 const PANIC_SPEED = 4.2;
-const TRAFFIC_SIDE = 2.8;
+const TRAFFIC_SIDE = 3.1;
 
 const SKIN_TONES = [0xf1c9a5, 0xe4b58f, 0xd39c74, 0xbe8359, 0xa06b46, 0x825536, 0x633f27];
 const HAIR_TONES = [
@@ -727,6 +727,9 @@ export function createPedestrianCrowd({
     slot.down = 0;
     slot.dead = false;
     slot.bleed = 0;
+    slot.hitVX = 0;
+    slot.hitVZ = 0;
+    slot.hitCool = 0;
     slot.idle = 0;
     slot.idleKind = 'look';
     slot.facing = null;
@@ -781,7 +784,7 @@ export function createPedestrianCrowd({
 
     // A car coming straight at someone on the pavement: run clear.
     if (!slot.crossing) {
-      const danger = trafficNear(slot.x, slot.z, PANIC_RANGE, 3);
+      const danger = trafficNear(slot.x, slot.z, PANIC_RANGE, 2.5);
       if (danger) {
         slot.idle = 0;
         clearChat(slot);
@@ -938,6 +941,9 @@ export function createPedestrianCrowd({
       slot.down = 0;
       slot.dead = false;
       slot.bleed = 0;
+      slot.hitVX = 0;
+      slot.hitVZ = 0;
+      slot.hitCool = 0;
       slot.mayWait = false;
       slot.crossWait = 0;
       if (slot.actor) {

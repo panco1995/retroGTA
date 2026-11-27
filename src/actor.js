@@ -254,6 +254,11 @@ export function createActor(opts = {}) {
 export function setPose(actor, pose) {
   actor.pose = pose;
   const p = actor.parts;
+  if (pose === 'getup') {
+    // Keep the lying angles; animateActor blends them up to standing.
+    actor.getup = 0;
+    return;
+  }
   actor.visual.rotation.x = 0;
   actor.visual.position.y = 0;
   if (pose === 'sit') {
@@ -284,12 +289,79 @@ export function setPose(actor, pose) {
 
 export const ATTACK_TIME = 0.34;
 
+// Key poses for standing up: lying, then a crouch on the knees, then upright.
+const GETUP_TIME = 0.55;
+const GETUP_DOWN = {
+  visual: [-Math.PI / 2, 0.34],
+  hipsY: 0.9,
+  leftLeg: [0.25, 0.08, 0.4],
+  rightLeg: [-0.4, -0.06, -0.28],
+  leftArm: [0.7, 0, 1.2],
+  rightArm: [-0.9, 0, -1.35],
+  torso: [0, 0.25, 0.18],
+};
+const GETUP_CROUCH = {
+  visual: [-0.55, 0.12],
+  hipsY: 0.6,
+  leftLeg: [-1.2, 0, 0.08],
+  rightLeg: [-1.2, 0, -0.08],
+  leftArm: [0.55, 0, 0.4],
+  rightArm: [0.35, 0, -0.4],
+  torso: [0.55, 0, 0],
+};
+const GETUP_STAND = {
+  visual: [0, 0],
+  hipsY: 0.9,
+  leftLeg: [0, 0, 0],
+  rightLeg: [0, 0, 0],
+  leftArm: [0, 0, 0],
+  rightArm: [0, 0, 0],
+  torso: [0, 0, 0],
+};
+
+function mix3(target, a, b, t) {
+  target.set(
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  );
+}
+
+function animateGetup(actor, dt) {
+  actor.getup = Math.min(1, (actor.getup || 0) + dt / GETUP_TIME);
+  const p = actor.parts;
+  const t = actor.getup;
+  const split = 0.55;
+  let from = GETUP_DOWN;
+  let to = GETUP_CROUCH;
+  let k = t / split;
+  if (t >= split) {
+    to = GETUP_STAND;
+    k = (t - split) / (1 - split);
+  }
+  const e = k * k * (3 - 2 * k);
+  actor.visual.rotation.x = from.visual[0] + (to.visual[0] - from.visual[0]) * e;
+  actor.visual.position.y = from.visual[1] + (to.visual[1] - from.visual[1]) * e;
+  actor.hips.position.y = from.hipsY + (to.hipsY - from.hipsY) * e;
+  mix3(p.leftLeg.rotation, from.leftLeg, to.leftLeg, e);
+  mix3(p.rightLeg.rotation, from.rightLeg, to.rightLeg, e);
+  mix3(p.leftArm.rotation, from.leftArm, to.leftArm, e);
+  mix3(p.rightArm.rotation, from.rightArm, to.rightArm, e);
+  const torso = to === GETUP_STAND ? [actor.hunch ?? 0, 0, 0] : to.torso;
+  mix3(p.torso.rotation, from.torso, torso, e);
+  if (t >= 1) setPose(actor, 'stand');
+}
+
 function damp(current, target, dt) {
   const k = 1 - Math.pow(0.0015, dt);
   return current + (target - current) * k;
 }
 
 export function animateActor(actor, speed, time, dt) {
+  if (actor.pose === 'getup') {
+    animateGetup(actor, dt);
+    return;
+  }
   if (actor.pose === 'sit' || actor.pose === 'down') return;
   const p = actor.parts;
 

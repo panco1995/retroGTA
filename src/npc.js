@@ -743,7 +743,7 @@ export function createPedestrianCrowd({
     actor.group.visible = true;
     actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
     actor.group.rotation.y = slot.heading;
-    if (actor.pose === 'down') setPose(actor, 'stand');
+    if (actor.pose === 'down' || actor.pose === 'getup') setPose(actor, 'stand');
     active.push(slot);
     return true;
   }
@@ -777,7 +777,7 @@ export function createPedestrianCrowd({
 
   function step(slot, dt, time) {
     const actor = slot.actor;
-    if (slot.dead || slot.down > 0) {
+    if (slot.dead || slot.down > 0 || actor.pose === 'getup') {
       placeActor(slot, actor, 0, dt, time);
       return;
     }
@@ -947,7 +947,7 @@ export function createPedestrianCrowd({
       slot.mayWait = false;
       slot.crossWait = 0;
       if (slot.actor) {
-        if (slot.actor.pose === 'down') setPose(slot.actor, 'stand');
+        if (slot.actor.pose === 'down' || slot.actor.pose === 'getup') setPose(slot.actor, 'stand');
         slot.actor.group.visible = false;
       }
     }

@@ -998,7 +998,7 @@ export function createGame(canvas) {
       if (body.down <= 0) {
         body.down = 0;
         body.bleed = 0;
-        setPose(actor, 'stand');
+        setPose(actor, 'getup');
       }
     }
   }
@@ -1216,10 +1216,11 @@ export function createGame(canvas) {
   }
 
   function updateFoot(dt, time) {
-    if (player.dead || player.down > 0) {
+    if (player.dead || player.down > 0 || player.pose === 'getup') {
       input.consume('attack');
       input.consume('interact');
       approach = null;
+      if (!player.dead && player.down <= 0) animateActor(player, 0, time, dt);
       return;
     }
     updateJump(dt);
@@ -1338,9 +1339,10 @@ export function createGame(canvas) {
 
   function updatePeds(dt, time) {
     for (const ped of peds) {
-      if (ped.dead || ped.down > 0) {
+      if (ped.dead || ped.down > 0 || ped.pose === 'getup') {
         ped.group.position.set(ped.x, WALK_TOP + world.ground(ped.x, ped.z), ped.z);
         ped.group.rotation.y = ped.heading;
+        if (!ped.dead && ped.down <= 0) animateActor(ped, 0, time, dt);
         continue;
       }
       if (ped.stun > 0) {

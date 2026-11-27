@@ -95,7 +95,6 @@
     "face": "east"
   },
   "safehouseProps": [
-    { "type": "marker", "dx": 2.35, "dz": 1.7 },
     { "type": "hydrant", "dx": -2.1, "dz": 2.1 },
     { "type": "trash", "dx": 3.6, "dz": 0.8 }
   ],

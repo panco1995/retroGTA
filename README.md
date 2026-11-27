@@ -90,7 +90,7 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `elevated`, `train` | An elevated track and a train that shuttles along it |
 | `gate` | One gate and a short approach road |
 | `trees` | Placed trees |
-| `safehouseProps` | `marker`, `hydrant`, and `trash` |
+| `safehouseProps` | `hydrant` and `trash` |
 | `vehicles` | 15 types; see [Vehicles](#vehicles). Unknown types fall back to `sedan`. Every parked vehicle can be entered; `driveable` marks the car the player starts next to. Ambient traffic can be carjacked too |
 | `pedestrians` | Fixed people who walk a path, with shirt, pants, and an optional cap. Separate from the runtime crowd; see [Pedestrians](#pedestrians) |
 | `bounds` | The reader accepts extra collision walls. The current map leaves this field out |

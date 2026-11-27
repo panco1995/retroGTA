@@ -78,7 +78,6 @@ export function buildCity() {
   const colliders = [];
   const buildings = [];
   const roads = [];
-  const markers = [];
   const stripes = [];
   // Sidewalk center lines. The crowd walks these and spawns on them.
   const walkways = [];
@@ -880,26 +879,6 @@ const platW = Math.min(w * 0.34, 2.4);
     }
   }
 
-  function addSaveMarker(x, z) {
-    const marker = new THREE.Group();
-    marker.position.set(x, groundHeight(x, z) + WALK_TOP + 0.03, z);
-    const pad = new THREE.Mesh(
-      new THREE.CircleGeometry(0.72, 20),
-      new THREE.MeshStandardMaterial({ color: 0x9ad7e4, emissive: 0x1a6070, emissiveIntensity: 0.45, roughness: 0.4 }),
-    );
-    pad.rotation.x = -Math.PI / 2;
-    marker.add(pad);
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.58, 0.07, 8, 28),
-      glow(0x7fe7ff, 1.1),
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.28;
-    marker.add(ring);
-    group.add(marker);
-    markers.push(marker);
-  }
-
   function addEl() {
     const { x, z0, z1, deckY, pillarSpacing } = MAP.elevated;
     const deck = box(4.6, 0.48, z1 - z0, concrete, x, deckY, (z0 + z1) / 2, { cast: true });
@@ -1047,8 +1026,7 @@ const platW = Math.min(w * 0.34, 2.4);
   for (const prop of MAP.safehouseProps) {
     const x = doorX - (prop.dz ?? 0);
     const z = doorZ + (prop.dx ?? 0);
-    if (prop.type === 'marker') addSaveMarker(x, z);
-    else if (prop.type === 'hydrant') addHydrant(x, z);
+    if (prop.type === 'hydrant') addHydrant(x, z);
     else if (prop.type === 'trash') addTrash(x, z);
   }
 
@@ -1140,7 +1118,6 @@ const platW = Math.min(w * 0.34, 2.4);
       return addVehicle(cfg);
     },
     update(dt) {
-      for (const marker of markers) marker.rotation.y += dt * 1.3;
       trainZ += trainDir * MAP.train.speed * dt;
       if (trainZ > MAP.train.maxZ) trainDir = -1;
       if (trainZ < MAP.train.minZ) trainDir = 1;

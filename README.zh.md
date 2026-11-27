@@ -90,7 +90,7 @@ make single      # 打成单个文件 dist/retrogta.html
 | `elevated`、`train` | 高架，以及在上面来回开的列车 |
 | `gate` | 一座牌楼和一小段引道 |
 | `trees` | 可摆放的树 |
-| `safehouseProps` | `marker`（存档光环）、`hydrant`（消防栓）、`trash`（垃圾桶） |
+| `safehouseProps` | `hydrant`（消防栓）、`trash`（垃圾桶） |
 | `vehicles` | 15 种车型，详见下方[车型](#车型)。未知类型按轿车处理。地图里停放的车辆都可以开，`driveable` 标出玩家初始旁边的那辆；环境车流也可以抢 |
 | `pedestrians` | 沿路径走动的固定路人，可配上衣、裤子和帽子。和运行时生成的路人群各自独立，见[路人](#路人) |
 | `bounds` | 读取代码接受额外碰撞墙。当前地图没有填写这一项 |

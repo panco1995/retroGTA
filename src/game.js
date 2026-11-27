@@ -1070,6 +1070,8 @@ export function createGame(canvas) {
     player.airborne = false;
     player.attack = 0;
     hero.group.attach(player.group);
+    // The NPC who was behind the wheel gives up the seat to the player.
+    if (hero.driver) hero.driver.visible = false;
     player.group.position.set(-0.36, 0.22, -0.15);
     player.group.rotation.set(0, 0, 0);
     setPose(player, 'sit');

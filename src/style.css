@@ -853,10 +853,16 @@ body.rebinding #map {
 
 #collection-canvas:active { cursor: grabbing; }
 
-/* View toggle beside the item controls; only vehicles with a modelled cabin
-   show it. */
-.collection-view {
+/* View toggles beside the item controls: the driver NPC and the interior
+   camera. Each appears only on vehicles that carry it. */
+.collection-views {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-view {
   border: 1px solid rgba(240, 212, 138, 0.4);
   border-radius: 4px;
   background: rgba(8, 11, 11, 0.78);
@@ -985,7 +991,7 @@ body.rebinding #map {
 
   .collection-nav { order: 1; }
 
-  .collection-view { order: 2; }
+  .collection-views { order: 2; }
 
   .collection-hint {
     order: 3;

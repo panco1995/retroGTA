@@ -211,6 +211,7 @@ const CATEGORIES = [
         x: 0,
         z: 0,
         heading: 0,
+        driver: true,
       }),
     })),
   },
@@ -229,6 +230,7 @@ let hintEl = null;
 let tabEls = [];
 let itemEls = [];
 let interiorBtn = null;
+let driverBtn = null;
 let renderer = null;
 let scene = null;
 let camera = null;
@@ -241,6 +243,9 @@ let frameHandle = 0;
 let lastTime = 0;
 let open = false;
 let interior = false;
+// Whether the driver NPC sits in the car in the exterior view. Kept across
+// items, like the interior view, so the choice survives switching cars.
+let driverOn = true;
 let category = 0;
 let index = 0;
 let dist = 8;
@@ -376,6 +381,7 @@ function mount(item) {
   // Restore the outgoing model before its mesh is released.
   const keepInterior = interior;
   if (viewer?.windshield) viewer.windshield.visible = true;
+  if (viewer?.driver) viewer.driver.visible = true;
   for (const child of [...pivot.children]) {
     pivot.remove(child);
     if (!child.userData.cached) disposeModel(child);
@@ -408,15 +414,18 @@ function mount(item) {
   // Only vehicles carry a seat, a windshield and a modelled cabin; the open
   // tractors and the like have none, so they skip the interior view.
   viewer = built.isObject3D
-    ? { group, seat: null, windshield: null, cabin: false }
+    ? { group, seat: null, windshield: null, cabin: false, driver: null }
     : {
         group,
         seat: built.seat ?? null,
         windshield: built.windshield ?? null,
         cabin: !!built.steering,
+        driver: built.driver ?? null,
       };
 
   pivot.add(group);
+  // The driver toggle is a viewing preference, so it follows the item.
+  if (viewer.driver) viewer.driver.visible = driverOn;
 
   interior = false;
   if (cabinLight) cabinLight.intensity = 0;
@@ -425,6 +434,7 @@ function mount(item) {
   frameModel(size);
   if (keepInterior && interiorAvailable()) setInterior(true);
   updateInteriorButton();
+  updateDriverButton();
   updateHint();
 }
 
@@ -464,6 +474,20 @@ function updateInteriorButton() {
   interiorBtn.setAttribute('aria-pressed', interior ? 'true' : 'false');
 }
 
+// The driver toggle belongs to the outside view: the interior camera takes
+// the driver's seat, so he is hidden there and the button goes away with him.
+function updateDriverButton() {
+  if (!driverBtn) return;
+  driverBtn.hidden = !viewer?.driver || interior;
+  driverBtn.setAttribute('aria-pressed', driverOn ? 'true' : 'false');
+}
+
+function setDriver(on) {
+  driverOn = !!on;
+  if (viewer?.driver) viewer.driver.visible = driverOn && !interior;
+  updateDriverButton();
+}
+
 // The hint names whichever key opens the interior, so a remapped interact
 // binding stays accurate.
 function updateHint() {
@@ -476,10 +500,13 @@ function setInterior(on) {
   const next = !!(on && viewer?.seat && viewer.windshield && viewer.cabin);
   if (interior === next) {
     updateInteriorButton();
+    updateDriverButton();
     return;
   }
   interior = next;
   if (viewer.windshield) viewer.windshield.visible = !interior;
+  // The camera sits in the driver's seat, so the driver steps out of frame.
+  if (viewer.driver) viewer.driver.visible = !interior && driverOn;
   if (cabinLight) cabinLight.intensity = interior ? 1.7 : 0;
   camera.fov = interior ? INTERIOR_FOV : EXTERIOR_FOV;
   camera.updateProjectionMatrix();
@@ -491,6 +518,7 @@ function setInterior(on) {
     updateCamera();
   }
   updateInteriorButton();
+  updateDriverButton();
 }
 
 function resize() {
@@ -597,9 +625,11 @@ export function initCollection() {
   countEl = document.getElementById('collection-count');
   hintEl = document.getElementById('collection-hint');
   interiorBtn = document.getElementById('collection-interior');
-  if (!canvasEl || !listEl || !nameEl || !countEl || !interiorBtn) return;
+  driverBtn = document.getElementById('collection-driver');
+  if (!canvasEl || !listEl || !nameEl || !countEl || !interiorBtn || !driverBtn) return;
 
   interiorBtn.addEventListener('click', () => setInterior(!interior));
+  driverBtn.addEventListener('click', () => setDriver(!driverOn));
   updateHint();
 
   tabEls = [...document.querySelectorAll('[data-collection-tab]')];

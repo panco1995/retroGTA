@@ -114,6 +114,9 @@ export function createTraffic({
       heading: 0,
       type: slot.type,
       color: slot.color,
+      // Ambient cars are driven, and with the clear greenhouse glass the
+      // driver is visible through the windows.
+      driver: true,
     });
     vehicle.traffic = true;
     vehicle.trafficIndex = slot.index;

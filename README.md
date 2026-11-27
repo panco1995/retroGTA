@@ -18,14 +18,15 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake
 - Four cameras: follow, first-person, top-down, and 2.5D
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
-- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield
+- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield. Traffic cars with clear glass carry a driver you can see inside
+- Vehicle cabins: passenger cars have a lined cabin with seats, a dashboard and a steering wheel, and clear glass, so the interior reads from outside. Box-bodied vans, buses and trucks keep their tinted panes. Taking a car hides the NPC driver and puts the player in the seat
 - Building and vehicle-body collision. A stopped car is solid. Cars transfer momentum to people too: a light touch nudges them aside, a faster hit knocks them down, bleeds and slides them along the road, and only a hard hit at speed kills. People and cars follow the ground height and stay on walkable ground
 - Momentum in car crashes: any two cars that touch exchange momentum by closing speed and mass ratio. Parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
 - GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
 - Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
-- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, five street props, and six building types on a 3D turntable, with an interior view from the driver's seat
+- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, five street props, and six building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -79,6 +80,8 @@ The main menu and the pause menu both have a Collection page. It is a full-scree
 Pick from the list, or use the left and right arrow keys, to step through the items in the current tab. The model sits on a turntable: drag to rotate it and scroll to zoom.
 
 Vehicles with a modelled cabin also show an **Interior view** button beside the item controls. It puts the camera in the same driver's seat the first-person driving view uses, hides the windshield, and turns dragging into a free look around the cabin. The E key, or whichever key is bound to entering and exiting a car, toggles it as well. Switching between vehicles keeps the interior view; switching to people or props returns to the exterior.
+
+Cars that carry a driver also show a **Driver NPC** toggle next to it. It seats or removes the driver in the outside view; the toggle disappears while the interior camera is in use, and the chosen state carries over between vehicles.
 
 ## Interface language
 
@@ -135,6 +138,8 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 | `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
 | `mixer` | Cement mixer | Tilted drum, reinforcing rings, rear discharge chute, six wheels |
 
+Passenger cars have clear glass, so their seats and the driver show from outside. The box-bodied vans, buses and trucks keep tinted panes: their body is a solid shell, so there is no cabin behind the glass to show.
+
 To add a type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the matching `type` on an entry in `data/saint-marks.json`.
 
 ## Pedestrians
@@ -162,7 +167,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 
 ## Traffic
 
-`src/city.js` derives a clockwise lane loop around each city block whose four sides are unbroken roads. Cars drive the right-hand lane of each loop, so neighboring blocks give two-way traffic. They slow for corners and follow moving cars and the player's car, but they do not stop for people: driving through someone knocks them down or kills them. Cars spawn and despawn only outside the camera, like the pedestrian crowd. Ambient cars can be carjacked: target one with E and it stops while you walk to the nearer side. Once taken, it becomes a normal car and can be parked or driven like any other.
+`src/city.js` derives a clockwise lane loop around each city block whose four sides are unbroken roads. Cars drive the right-hand lane of each loop, so neighboring blocks give two-way traffic. They slow for corners and follow moving cars and the player's car, but they do not stop for people: driving through someone knocks them down or kills them. Traffic cars with clear glass are driven by an NPC you can see through the windows; the driver gives up the seat when you take the car. Cars spawn and despawn only outside the camera, like the pedestrian crowd. Ambient cars can be carjacked: target one with E and it stops while you walk to the nearer side. Once taken, it becomes a normal car and can be parked or driven like any other.
 
 ## Project layout
 
@@ -178,7 +183,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders: the body is merged per material, the tyre and hub share one wheel mesh, and every car gets mirrors, panel gaps and a first person cabin |
+| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
 | `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |

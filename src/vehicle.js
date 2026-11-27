@@ -29,6 +29,19 @@ const GLASS_MAT = new THREE.MeshStandardMaterial({
 });
 GLASS_MAT.userData.defaultColor = 0x3a4a55;
 
+// The panes of a passenger car's greenhouse are see-through, so the seats and
+// the driver show from outside. Box bodied vehicles keep GLASS_MAT: their body
+// is a solid shell, so there is no cabin behind those panes to show.
+const CABIN_GLASS_MAT = new THREE.MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.08,
+  metalness: 0.2,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+
 const TYRE_COLOR = 0x1a1a1a;
 const HUB_COLOR = 0x8d9094;
 const SLOT_COLOR = 0x24262a;
@@ -426,7 +439,7 @@ function addGreenhouse(group, {
         [side * roofHalfW, glassTopY, topSplits[i + 1]],
         [side * beltHalfW, glassBottomY, z0],
         [side * beltHalfW, glassBottomY, z1],
-      ], GLASS_MAT, SIDE_GLASS);
+      ], CABIN_GLASS_MAT, SIDE_GLASS);
       // Waistline strip under each pane and a rail along its top, so the glass
       // sits in a frame of bright trim instead of bleeding into the paint.
       part(group, 0.035, 0.05, Math.abs(z1 - z0) - 0.02, TRIM_MAT, side * (beltHalfW + 0.012), beltY + 0.01, (z0 + z1) / 2, accent);
@@ -457,13 +470,13 @@ function addGreenhouse(group, {
     [roofHalfW - 0.04, roofY, roofFrontZ],
     [-beltHalfW + 0.04, beltY, frontZ + 0.03],
     [beltHalfW - 0.04, beltY, frontZ + 0.03],
-  ], GLASS_MAT, SCREEN_GLASS);
+  ], CABIN_GLASS_MAT, SCREEN_GLASS);
   quadPane(group, [
     [-roofHalfW + 0.04, roofY, roofRearZ],
     [roofHalfW - 0.04, roofY, roofRearZ],
     [-beltHalfW + 0.04, beltY, rearZ - 0.03],
     [beltHalfW - 0.04, beltY, rearZ - 0.03],
-  ], GLASS_MAT, SCREEN_GLASS);
+  ], CABIN_GLASS_MAT, SCREEN_GLASS);
 
   // Trim down the A and C pillars along the edge of each screen. It is the
   // frame that makes the rear glass read as a window from the chase camera.
@@ -524,6 +537,8 @@ function addGreenhouse(group, {
     group.userData.cabinFloorY = floorY;
   }
   group.userData.cabinFrontZ = frontZ;
+  // The panes are clear, so this car can carry a visible driver.
+  group.userData.seeThrough = true;
   return windshield;
 }
 
@@ -625,6 +640,59 @@ function addCabinInterior(group, mat, built, seat) {
   }
   part(group, 0.18, 0.34, 0.85, mat, 0, floorY + 0.17, seat.z - 0.08, 0x272c30);
   return spin;
+}
+
+// A driver sitting behind the wheel, so a car with somebody in it reads from
+// outside. He is merged into one vertex coloured mesh with the shared trim
+// material, and kept out of the body merge so the player can hide him when
+// they take the seat in the game or in the collection.
+const DRIVER_SHIRTS = [0x2b3440, 0x3a3f47, 0x6b2f2f, 0x2f4f3a, 0x4a4d52, 0x7a5a3a, 0x3c3f6b, 0x8a4a2c, 0xc8c2b4];
+const DRIVER_SKINS = [0xf1c9a5, 0xe4b58f, 0xd39c74, 0xbe8359, 0xa06b46, 0x825536, 0x633f27];
+const DRIVER_HAIR = [0x14100d, 0x231812, 0x33231a, 0x4a3120, 0x6a4a2c, 0x8c8c8a, 0xd8d4cb];
+
+function addSeatedDriver(group, seat) {
+  const pick = (list) => list[(Math.random() * list.length) | 0];
+  const skin = pick(DRIVER_SKINS);
+  const hair = pick(DRIVER_HAIR);
+  const shirt = pick(DRIVER_SHIRTS);
+  const x = seat.x;
+  const eye = seat.y;
+  const z = seat.z;
+  const geos = [];
+  const box = (w, h, d, ox, oy, oz, color) => {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    paintGeo(geo, color);
+    geo.translate(ox, oy, oz);
+    geos.push(geo);
+  };
+  // The seat height is the camera eye, so the head starts at eye level and
+  // stays under the roof even in the low sports car. Torso, shoulders, neck.
+  box(0.42, 0.46, 0.26, x, eye - 0.42, z - 0.16, shirt);
+  box(0.46, 0.12, 0.28, x, eye - 0.19, z - 0.18, shirt);
+  box(0.1, 0.08, 0.1, x, eye - 0.09, z - 0.16, skin);
+  // Head and hair, with a cap on some of them for variety.
+  box(0.21, 0.22, 0.21, x, eye + 0.02, z - 0.16, skin);
+  box(0.22, 0.075, 0.22, x, eye + 0.14, z - 0.17, hair);
+  box(0.22, 0.14, 0.05, x, eye + 0.06, z - 0.27, hair);
+  if (Math.random() < 0.3) {
+    const cap = pick([0x2b2b2e, 0x8c2f2f, 0x2f4a6b, 0x33363b]);
+    box(0.23, 0.06, 0.23, x, eye + 0.175, z - 0.16, cap);
+    box(0.17, 0.03, 0.12, x, eye + 0.16, z - 0.01, cap);
+  }
+  // Arms reaching for the wheel, with hands resting on the rim.
+  for (const side of [-1, 1]) {
+    const arm = new THREE.BoxGeometry(0.12, 0.58, 0.13);
+    paintGeo(arm, shirt);
+    arm.rotateX(-1.38);
+    arm.translate(x + side * 0.155, eye - 0.305, z + 0.155);
+    geos.push(arm);
+    box(0.1, 0.09, 0.1, x + side * 0.11, eye - 0.37, z + 0.45, skin);
+  }
+  const mesh = new THREE.Mesh(mergeGeometries(geos, false), TRIM_MAT);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
 }
 
 // The box-bodied vehicles are one painted shell, and a box is invisible from
@@ -1362,7 +1430,9 @@ export function createVehicle(cfg) {
   // cabin it would block the view, so it can be hidden for first person.
   const glassParts = [];
   group.traverse((obj) => {
-    if (obj.isMesh && obj.material === GLASS_MAT) glassParts.push(obj);
+    if (obj.isMesh && (obj.material === GLASS_MAT || obj.material === CABIN_GLASS_MAT)) {
+      glassParts.push(obj);
+    }
   });
   glassParts.sort((a, b) => b.position.z - a.position.z);
   const windshield = glassParts[0] ?? null;
@@ -1401,6 +1471,14 @@ export function createVehicle(cfg) {
     built.tails = mergedTail ? [mergedTail] : [];
   }
 
+  // Only cars with clear glass get a visible driver; a van or a bus hides
+  // everything behind its tinted panes, so the mesh would never be seen.
+  // Built after the body merge so the driver stays its own mesh and can be
+  // hidden when the player takes the seat.
+  const driver = cfg.driver && steering && group.userData.seeThrough
+    ? addSeatedDriver(group, seat)
+    : null;
+
   const state = {
     group,
     type,
@@ -1428,6 +1506,7 @@ export function createVehicle(cfg) {
     tails: built.tails,
     windshield,
     steering,
+    driver,
     seat,
     inUse: false,
     _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },

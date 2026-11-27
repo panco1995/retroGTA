@@ -640,6 +640,10 @@ export function createGame(canvas) {
       vehicle.knockVX += ix;
       vehicle.knockVZ += iz;
     }
+    const jolt = Math.hypot(ix, iz) * 0.018;
+    if (jolt > 0.01) {
+      vehicle.bounce = Math.max(vehicle.bounce, Math.min(0.18, jolt));
+    }
   }
 
   // Two cars that touch exchange momentum along the line between them.
@@ -685,7 +689,10 @@ export function createGame(canvas) {
       } else {
         const other = hitVehicleAt(vehicle, nx, vehicle.z);
         if (other) bounceVehicles(vehicle, other);
-        else vehicle.knockVX = -vx * 0.25;
+        else {
+          vehicle.knockVX = -vx * 0.25;
+          vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+        }
       }
       const nz = vehicle.z + vz * dt;
       if (!vehicleBlocked(vehicle.x, nz, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
@@ -693,7 +700,10 @@ export function createGame(canvas) {
       } else {
         const other = hitVehicleAt(vehicle, vehicle.x, nz);
         if (other) bounceVehicles(vehicle, other);
-        else vehicle.knockVZ = -vz * 0.25;
+        else {
+          vehicle.knockVZ = -vz * 0.25;
+          vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+        }
       }
       vehicle.heading += spin * dt;
       const damp = Math.exp(-2.4 * dt);
@@ -883,6 +893,20 @@ export function createGame(canvas) {
           body.jumpV = 0;
           body.airborne = false;
         }
+        if (severity >= DOWN_SPEED) {
+          // Fling them off the ground; a fast car throws them much farther.
+          body.jumpV = Math.min(9, impact * 0.6);
+          body.jumpY = Math.max(body.jumpY || 0, 0.02);
+        }
+        // The car rocks as it runs over the body.
+        const sideHit = (dx * Math.cos(vehicle.heading)
+          - dz * Math.sin(vehicle.heading)) / dist;
+        vehicle.bounce = Math.max(
+          vehicle.bounce, Math.min(0.2, 0.02 + impact * 0.01),
+        );
+        vehicle.roll = Math.max(
+          -0.1, Math.min(0.1, vehicle.roll - sideHit * 0.07),
+        );
         if (!slowed) {
           slowed = true;
           const loss = severity >= KILL_SPEED ? 0.85 : 0.94;
@@ -982,6 +1006,15 @@ export function createGame(canvas) {
         syncPerson(body, actor);
       }
       if (!body.dead && !(body.down > 0)) continue;
+      if (body.jumpY > 0 || body.jumpV > 0) {
+        body.jumpV = (body.jumpV || 0) - GRAVITY * dt;
+        body.jumpY = (body.jumpY || 0) + body.jumpV * dt;
+        if (body.jumpY <= 0) {
+          body.jumpY = 0;
+          body.jumpV = 0;
+        }
+        syncPerson(body, actor);
+      }
       if (body.bleed > 0) body.bleed -= dt;
       else {
         blood.drip(body.x, body.z, world.ground(body.x, body.z));
@@ -1295,13 +1328,19 @@ export function createGame(canvas) {
     if (!carHits(hero, nx, hero.z)) hero.x = nx;
     else {
       hitCar = hitVehicleAt(hero, nx, hero.z);
-      if (!hitCar) hero.speed *= -0.22;
+      if (!hitCar) {
+        hero.speed *= -0.22;
+        hero.bounce = Math.max(hero.bounce, 0.08);
+      }
     }
     if (!carHits(hero, hero.x, nz)) hero.z = nz;
     else {
       const car = hitVehicleAt(hero, hero.x, nz);
       if (car) hitCar = car;
-      else if (!hitCar) hero.speed *= -0.22;
+      else if (!hitCar) {
+        hero.speed *= -0.22;
+        hero.bounce = Math.max(hero.bounce, 0.08);
+      }
     }
     if (hitCar) impactVehicle(hitCar);
     hero.collider();

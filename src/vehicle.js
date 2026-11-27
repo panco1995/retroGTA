@@ -543,6 +543,8 @@ export function createVehicle(cfg) {
     shoveX: 0,
     shoveZ: 0,
     shoveYaw: 0,
+    bounce: 0,
+    roll: 0,
     wheels: built.wheels,
     tails: built.tails,
     windshield,
@@ -551,9 +553,10 @@ export function createVehicle(cfg) {
     _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
     sync() {
       group.rotation.order = 'YXZ';
-      group.position.set(this.x, this.y || 0, this.z);
+      group.position.set(this.x, (this.y || 0) + (this.bounce || 0), this.z);
       group.rotation.y = this.heading;
       group.rotation.x = this.pitch || 0;
+      group.rotation.z = this.roll || 0;
     },
     aabb() {
       const c = Math.abs(Math.cos(this.heading));
@@ -587,6 +590,11 @@ export function createVehicle(cfg) {
       return hx * c + hz * s;
     },
     updateVisual(dt) {
+      const settle = Math.exp(-7 * dt);
+      this.bounce *= settle;
+      this.roll *= settle;
+      if (Math.abs(this.bounce) < 0.001) this.bounce = 0;
+      if (Math.abs(this.roll) < 0.001) this.roll = 0;
       this.sync();
       for (const wheel of this.wheels) {
         wheel.roller.rotation.x += (this.speed / wheel.radius) * dt;

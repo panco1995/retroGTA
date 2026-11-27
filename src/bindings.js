@@ -149,12 +149,6 @@ function refreshButtons() {
   }
 }
 
-function refreshCopy() {
-  const about = document.getElementById('boot-keys');
-  if (about) about.textContent = t('bootKeys', keyVars());
-  refreshButtons();
-}
-
 function notify() {
   listeners.forEach((listener) => listener());
 }
@@ -175,7 +169,7 @@ function assign(action, code) {
   bindings[action] = code;
   listening = null;
   save();
-  refreshCopy();
+  refreshButtons();
   notify();
 }
 
@@ -205,14 +199,14 @@ function resetBindings() {
   listening = null;
   bindings = { ...DEFAULTS };
   save();
-  refreshCopy();
+  refreshButtons();
   notify();
 }
 
 export function initBindings() {
   mount(document.getElementById('controls'));
-  refreshCopy();
-  onLangChange(refreshCopy);
+  refreshButtons();
+  onLangChange(refreshButtons);
 
   document.getElementById('controls-reset').addEventListener('click', resetBindings);
 

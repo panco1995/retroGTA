@@ -549,6 +549,51 @@ body.rebinding #map {
   text-shadow: 0 2px 0 #000;
 }
 
+.about-meta {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-meta li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+}
+
+.about-key {
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+}
+
+.about-value {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+}
+
+.about-link {
+  color: var(--ink);
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-decoration: underline;
+  text-decoration-color: rgba(240, 212, 138, 0.4);
+  text-underline-offset: 3px;
+  transition: color 0.12s ease, text-decoration-color 0.12s ease;
+}
+
+.about-link:hover,
+.about-link:focus-visible {
+  color: var(--amber);
+  text-decoration-color: var(--amber);
+}
+
 #pause {
   position: fixed;
   inset: 0;
@@ -630,9 +675,3 @@ body.rebinding #map {
   letter-spacing: 0.06em;
 }
 
-.boot-keys {
-  margin-top: 12px;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  color: #efe6d2;
-}

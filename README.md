@@ -20,10 +20,10 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield
 - Building and vehicle-body collision. A stopped car is solid. A slow shove knocks someone down and they bleed; road speed runs them over and leaves more blood. People and cars follow the ground height and stay on walkable ground
-- GTA-style radar minimap, plus a full-island map in the pause menu
+- GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
-- Main menu (Start, Settings, About) with rebindable keys saved in the browser
-- Pause menu (Esc): map, controls, language, cheats, restart, and exit
+- Main menu (Start, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
+- Pause menu (Esc): resume, restart, settings, map, cheats, and exit
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -49,7 +49,7 @@ make single      # one file, dist/retrogta.html
 
 Choose Start on the main menu. In the follow camera, move the mouse to look around. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
 
-Rebind keys in Settings (main menu) or Controls (pause menu): click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses.
+Rebind keys in Settings → Controls → Keyboard, in either menu: click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses. The camera can also be picked directly in Settings → View; it stays in sync with the V key.
 
 | Key | On foot | Driving |
 | --- | --- | --- |
@@ -57,16 +57,17 @@ Rebind keys in Settings (main menu) or Controls (pause menu): click a binding, t
 | Shift | Run | — |
 | Mouse | Turn the follow camera | Turn the follow camera |
 | V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
+| M | Toggle the full-island map | Toggle the full-island map |
 | E | Walk to the nearer side and get in | Exit when moving slowly |
 | Space | Jump | Brake |
 | Left click | Punch | — |
-| Esc | Pause: map, controls, language, cheats, restart, or exit | Pause: map, controls, language, cheats, restart, or exit |
+| Esc | Pause: resume, restart, settings, map, cheats, or exit | Pause: resume, restart, settings, map, cheats, or exit |
 
 The round radar at the bottom left shows the area around the player and rotates so the player faces up; driving fast widens the view. The arrow is the player, the cyan dot is the safehouse, and white dots are parked vehicles. Moving traffic and pedestrians are not shown. The pause map shows the whole island with north up. While driving, the top-right readout shows speed in km/h; reverse speed is negative.
 
 ## Interface language
 
-Switch the interface in Settings on the main menu, or Language in the pause menu. The choice is saved in the browser.
+Switch the interface in Settings → Language, in either the main or pause menu (the settings page is shared). The choice is saved in the browser.
 
 - English (`en`) — default
 - Chinese (`zh`)
@@ -152,7 +153,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | File | Role |
 | --- | --- |
 | `src/main.js` | Entry point |
-| `src/menu.js` | Main menu: Start, Settings, About |
+| `src/menu.js` | Menu navigation for the main and pause menus, including the shared settings page |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Builds roads, buildings, the elevated track, colliders, and the lane/sidewalk networks |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
@@ -167,6 +168,6 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/bindings.js` | Key bindings, saved in the browser |
 | `src/input.js` | Keyboard and pointer lock |
 | `src/minimap.js` | Radar minimap and the full-island pause map |
-| `src/style.css` | HUD styles |
+| `src/style.css` | HUD and menu styles |
 | `index.html` | Page shell and HUD markup |
 | `data/saint-marks.json` | Map: roads, blocks, landmarks, vehicles, and pedestrians |

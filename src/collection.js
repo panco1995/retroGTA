@@ -184,6 +184,26 @@ const BUILDINGS = [
     }),
   },
   {
+    id: 'hospital',
+    nameKey: 'building_hospital',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 20, d: 14, floors: 5, face: 'south',
+      color: 0xe9e4d8, style: 'hospital', seed: 501,
+      sign: ['HOSPITAL', '#b33a3a'],
+    }),
+  },
+  {
+    id: 'police',
+    nameKey: 'building_police',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 14, d: 10, floors: 2, face: 'south',
+      color: 0xb6bec8, style: 'police', seed: 502,
+      sign: ['POLICE', '#1d4f9c'],
+    }),
+  },
+  {
     id: 'safehouse',
     nameKey: 'building_safehouse',
     cache: true,

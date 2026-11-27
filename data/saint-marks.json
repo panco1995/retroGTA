@@ -110,6 +110,32 @@
       "seed": 401
     }
   ],
+  "landmarks": [
+    {
+      "type": "hospital",
+      "x": -68,
+      "z": 18.2,
+      "w": 24,
+      "d": 16,
+      "floors": 5,
+      "face": "north",
+      "color": "#e9e4d8",
+      "sign": ["HOSPITAL", "#b33a3a"],
+      "seed": 501
+    },
+    {
+      "type": "police",
+      "x": -63,
+      "z": -32.8,
+      "w": 16,
+      "d": 10,
+      "floors": 2,
+      "face": "north",
+      "color": "#b6bec8",
+      "sign": ["POLICE", "#1d4f9c"],
+      "seed": 502
+    }
+  ],
   "trees": [
     { "x": -7.6, "lane": "sidewalkNorth", "scale": 1 },
     { "x": 1.5, "lane": "sidewalkNorth", "scale": 0.9 },

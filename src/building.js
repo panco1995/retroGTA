@@ -51,6 +51,8 @@ function signColor(css) {
 
 export function buildingHeight({ floors, style }) {
   if (style === 'store') return 4.8;
+  if (style === 'hospital') return Math.max(5, floors ?? 5) * FLOOR_H;
+  if (style === 'police') return Math.max(2, floors ?? 2) * FLOOR_H;
   return style === 'industrial' ? 8.4 : floors * FLOOR_H;
 }
 
@@ -71,9 +73,10 @@ export function createBuilding(opts) {
   house.rotation.y = yaw;
 
   const tint = color ?? BRICKS[Math.floor(hash(seed, 2) * BRICKS.length)];
-  // Corner shops are rendered panels rather than brick, so the storefront
-  // reads differently from the row houses next to it.
-  const wall = style === 'store'
+  // Shops, hospitals and police stations are rendered panels rather than
+  // brick, so their fronts read differently from the row houses next to them.
+  const panelStyle = style === 'store' || style === 'hospital' || style === 'police';
+  const wall = panelStyle
     ? solid(tint, 0.88)
     : brickMaterial(tint, Math.max(w, d), height);
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), wall);
@@ -83,7 +86,7 @@ export function createBuilding(opts) {
   house.add(body);
 
   const trim = solid(shade(tint, isSafe ? 1.12 : 0.72), 0.85);
-  const bands = style === 'industrial' ? 1 : style === 'store' ? 0 : floors;
+  const bands = style === 'industrial' ? 1 : panelStyle ? 0 : floors;
   for (let f = 1; f <= bands; f++) {
     const band = new THREE.Mesh(bandGeo, trim);
     const y = style === 'industrial' ? height - 0.3 : f * FLOOR_H;
@@ -158,6 +161,125 @@ export function createBuilding(opts) {
       unit.castShadow = true;
       house.add(unit);
     }
+  } else if (style === 'hospital') {
+    const board = sign ?? ['HOSPITAL', '#b33a3a'];
+    // A tall glazed entrance under a wide canopy, then window strips on the
+    // upper floors so the block reads as a hospital rather than an office.
+    const entryW = Math.min(w * 0.32, 4.6);
+    const entry = new THREE.Mesh(new THREE.PlaneGeometry(entryW, 2.9), windowLitMat);
+    entry.position.set(0, 1.55, zf);
+    house.add(entry);
+    for (let i = 0; i <= 3; i += 1) {
+      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.07, 3, 0.08), metal);
+      mull.position.set(-entryW / 2 + (entryW / 3) * i, 1.55, zf + 0.02);
+      house.add(mull);
+    }
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(entryW + 3, 0.2, 2.6), solid(0xdad4c6, 0.85));
+    canopy.position.set(0, 3.35, d / 2 + 1.05);
+    canopy.castShadow = true;
+    house.add(canopy);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(entryW + 1.4, 0.06, 0.5), glow(0xfff0cc, 0.45));
+    strip.position.set(0, 3.22, d / 2 + 1.0);
+    house.add(strip);
+
+    // Red cross beside the sign, so the building is obvious from the street.
+    const red = solid(0xc22a2a, 0.5);
+    const crossX = Math.min(w * 0.3, 7.4);
+    const crossY = 4.08;
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.25, 0.08), red);
+    crossV.position.set(crossX, crossY, zf + 0.02);
+    house.add(crossV);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.08), red);
+    crossH.position.set(crossX, crossY, zf + 0.03);
+    house.add(crossH);
+
+    const signBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(Math.min(w * 0.5, 7), 0.85),
+      signMaterial(board[0], board[1]),
+    );
+    signBoard.position.set(-w * 0.06, crossY, zf + 0.02);
+    house.add(signBoard);
+
+    for (let f = 1; f < floors; f += 1) {
+      const y = f * FLOOR_H + 2.1;
+      const stripW = w * 0.86;
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(stripW, 1.15), windowMat);
+      pane.position.set(0, y, zf);
+      house.add(pane);
+      const cols = Math.max(3, Math.round(stripW / 2.4));
+      for (let i = 0; i <= cols; i += 1) {
+        const mull = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.25, 0.08), metal);
+        mull.position.set(-stripW / 2 + (stripW / cols) * i, y, zf + 0.02);
+        house.add(mull);
+      }
+      // A couple of lit panes on each floor, so the ward wing reads at night.
+      for (let c = 0; c < 2; c += 1) {
+        const wx = -stripW / 2 + stripW * (0.3 + c * 0.4);
+        const lit = new THREE.Mesh(new THREE.PlaneGeometry(stripW / cols - 0.18, 0.95), windowLitMat);
+        lit.position.set(wx, y, zf + 0.03);
+        house.add(lit);
+      }
+    }
+
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.24, 1.5), windowMat);
+      wing.position.set(side * w * 0.32, 1.85, zf);
+      house.add(wing);
+    }
+
+    for (const [ax, az] of [[-w * 0.22, -d * 0.1], [0, 0.1], [w * 0.22, -d * 0.16]]) {
+      const unit = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 1.2), solid(0x9a9a92, 0.8));
+      unit.position.set(ax, height + 0.4, az);
+      unit.castShadow = true;
+      house.add(unit);
+    }
+  } else if (style === 'police') {
+    const board = sign ?? ['POLICE', '#1d4f9c'];
+    const blue = solid(signColor(board[1]), 0.62, 0.08);
+    // A police-blue belt under the parapet, an entrance with a canopy and a
+    // radio mast on the roof.
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.5, 0.14), blue);
+    belt.position.set(0, height - 0.66, zf + 0.01);
+    house.add(belt);
+
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.3, 0.1), solid(0x1b2430, 0.55));
+    door.position.set(0, 1.16, zf);
+    house.add(door);
+    const doorPane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.15), windowLitMat);
+    doorPane.position.set(0, 1.5, zf + 0.06);
+    house.add(doorPane);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.16, 1.5), solid(0xd6d2c6, 0.85));
+    canopy.position.set(0, 2.9, d / 2 + 0.7);
+    canopy.castShadow = true;
+    house.add(canopy);
+    const signBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(Math.min(w * 0.55, 4.6), 0.66),
+      signMaterial(board[0], board[1]),
+    );
+    signBoard.position.set(0, 3.6, zf + 0.02);
+    house.add(signBoard);
+
+    addWindow(house, -w * 0.3, 1.7, zf, 1.9, 1.15, false);
+    addWindow(house, w * 0.3, 1.7, zf, 1.9, 1.15, false);
+    for (let f = 1; f < floors; f += 1) {
+      const y = f * FLOOR_H + 1.7;
+      const cols = Math.max(3, Math.floor(w / 4.4));
+      for (let c = 0; c < cols; c += 1) {
+        const wx = -w / 2 + (w * (c + 1)) / (cols + 1);
+        addWindow(house, wx, y, zf, 1, 1, hash(seed, f * 17 + c) < 0.35);
+      }
+    }
+
+    const unit = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.75, 1.0), solid(0x9a9a92, 0.8));
+    unit.position.set(w * 0.2, height + 0.38, -d * 0.1);
+    unit.castShadow = true;
+    house.add(unit);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.6, 5), metal);
+    mast.position.set(-w * 0.26, height + 1.3, -d * 0.2);
+    house.add(mast);
+    const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), glow(0xff3030, 0.6));
+    beacon.position.set(-w * 0.26, height + 2.55, -d * 0.2);
+    house.add(beacon);
   } else if (style === 'industrial') {
     const doorW = Math.min(w * 0.42, 5.5);
     const garage = new THREE.Mesh(new THREE.BoxGeometry(doorW, 3.4, 0.08), trimDark);
@@ -206,7 +328,7 @@ export function createBuilding(opts) {
     }
   }
 
-  if (style !== 'industrial' && style !== 'store') {
+  if (!panelStyle && style !== 'industrial') {
     const cols = w > 9.4 ? 3 : 2;
     for (let f = 1; f < floors; f++) {
       const y = (f + 0.55) * FLOOR_H;
@@ -226,7 +348,7 @@ export function createBuilding(opts) {
     }
   }
 
-  if (fireEscape && style !== 'industrial' && style !== 'store') {
+  if (fireEscape && !panelStyle && style !== 'industrial') {
     addFireEscape(house, w, d, floors);
   }
 

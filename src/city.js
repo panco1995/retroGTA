@@ -205,14 +205,14 @@ export function buildCity() {
     });
   }
 
-  // Hand-placed convenience stores, like the safehouse: the map data gives a
-  // spot on a street frontage and the same building builder does the rest.
-  function addStore(spec) {
+  // Hand-placed buildings, like the safehouse: the map data gives a spot on a
+  // street frontage and the same building builder does the rest.
+  function addPlacedBuilding(spec, style) {
     const { x, z, w, d, face, color } = spec;
     const baseY = groundHeight(x, z);
     const house = createBuilding({
       ...spec,
-      style: 'store',
+      style,
       color: color == null ? undefined : colorOf(color),
       baseY,
     });
@@ -230,9 +230,19 @@ export function buildCity() {
       z,
       w: hw * 2,
       d: hd * 2,
-      kind: 'store',
-      top: baseY + buildingHeight({ style: 'store' }),
+      kind: style,
+      top: baseY + buildingHeight({ ...spec, style }),
     });
+  }
+
+  function addStore(spec) {
+    addPlacedBuilding(spec, 'store');
+  }
+
+  // Hospitals and police stations are placed the same way; the entry's `type`
+  // picks the building style.
+  function addLandmark(spec) {
+    addPlacedBuilding(spec, spec.type);
   }
 
   function fillBlocks() {
@@ -844,6 +854,7 @@ export function buildCity() {
   commitStripes();
   fillBlocks();
   for (const store of MAP.stores ?? []) addStore(store);
+  for (const landmark of MAP.landmarks ?? []) addLandmark(landmark);
   addShape(MAP.island, 0, 0x3e3a34);
   if (MAP.beach) addShape(MAP.beach, 0.03, 0xc6b48a);
   if (MAP.landing) addShape(MAP.landing, 0.02, 0x4a463c);

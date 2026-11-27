@@ -92,7 +92,11 @@ function buildBase(world) {
         ? '#6d7270'
         : b.kind === 'store'
           ? '#4f8a63'
-          : '#7a463c';
+          : b.kind === 'hospital'
+            ? '#cfc8b8'
+            : b.kind === 'police'
+              ? '#4a6d9a'
+              : '#7a463c';
     const x = px(b.x - b.w / 2);
     const y = py(b.z - b.d / 2);
     g.fillRect(x, y, Math.max(1, b.w * scale), Math.max(1, b.d * scale));

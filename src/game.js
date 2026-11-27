@@ -8,9 +8,9 @@ import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
 import { createTraffic } from './traffic.js';
-import { onLangChange, t, toggleLang } from './i18n.js';
-import { keyVars, onBindingsChange, resetPauseControls } from './bindings.js';
-import { openMainMenu } from './menu.js';
+import { onLangChange, t } from './i18n.js';
+import { keyVars, onBindingsChange } from './bindings.js';
+import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseHome } from './menu.js';
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
 
@@ -138,6 +138,9 @@ export function createGame(canvas) {
   let started = false;
   let paused = false;
   let suppressEsc = false;
+  // Tracks whether the map was opened straight from gameplay with its hotkey,
+  // so closing it resumes the game instead of landing on the pause menu.
+  let mapFromGame = false;
   let mode = 'foot';
   let view = 'follow';
   let approach = null;
@@ -177,8 +180,6 @@ export function createGame(canvas) {
   const menuEl = document.getElementById('menu');
   const hudEl = document.getElementById('hud');
   const pauseEl = document.getElementById('pause');
-  const pauseHomeEl = document.getElementById('pause-home');
-  const cheatsPanel = document.getElementById('pause-cheats-panel');
   const cheatSelect = document.getElementById('cheat-vehicle-type');
   const cheatStatus = document.getElementById('cheat-status');
   const mapPanel = document.getElementById('pause-map-panel');
@@ -426,7 +427,7 @@ export function createGame(canvas) {
 
   function openPause() {
     if (!started || paused) return;
-    resetPauseControls();
+    showPauseHome();
     paused = true;
     suppressEsc = true;
     document.exitPointerLock();
@@ -440,9 +441,28 @@ export function createGame(canvas) {
   function closePause() {
     if (!paused) return;
     paused = false;
+    mapFromGame = false;
     pauseEl.classList.add('hidden');
     input.release();
     if (view === 'follow') input.lock();
+  }
+
+  function closeMap() {
+    if (mapFromGame) closePause();
+    else showPauseHome();
+  }
+
+  // The map hotkey works during play and while the map is up; elsewhere in the
+  // pause menu it stays out of the way.
+  function toggleMap() {
+    if (!started || suppressEsc) return;
+    if (!paused) {
+      openPause();
+      mapFromGame = true;
+      showPage('pause', 'map');
+      return;
+    }
+    if (currentPage().page === 'map') closeMap();
   }
 
   function carHits(vehicle, x, z) {
@@ -1238,19 +1258,15 @@ export function createGame(canvas) {
     minimap.drawFull(mapCanvas, { x: focus.x, z: focus.z, heading: focus.heading }, world.vehicles);
   }
 
-  document.getElementById('pause-map').addEventListener('click', () => {
-    pauseHomeEl.hidden = true;
-    mapPanel.hidden = false;
-    drawPauseMap();
+  onPageChange(({ menu, page }) => {
+    if (menu !== 'pause') return;
+    if (page === 'map') drawPauseMap();
+    else mapFromGame = false;
+    if (page === 'cheats') cheatStatus.textContent = '';
   });
-  document.getElementById('pause-map-back').addEventListener('click', () => resetPauseControls());
 
-  document.getElementById('pause-cheats').addEventListener('click', () => {
-    pauseHomeEl.hidden = true;
-    cheatsPanel.hidden = false;
-    cheatStatus.textContent = '';
-  });
-  document.getElementById('pause-cheats-back').addEventListener('click', () => resetPauseControls());
+  document.getElementById('pause-map-back').addEventListener('click', () => closeMap());
+
   document.getElementById('cheat-spawn').addEventListener('click', () => {
     spawnCheatVehicle(cheatSelect.value);
   });
@@ -1279,7 +1295,6 @@ export function createGame(canvas) {
   });
 
   document.getElementById('pause-resume').addEventListener('click', () => closePause());
-  document.getElementById('pause-lang').addEventListener('click', () => toggleLang());
   document.getElementById('pause-restart').addEventListener('click', () => {
     resetSession();
     closePause();
@@ -1291,7 +1306,6 @@ export function createGame(canvas) {
     pauseEl.classList.add('hidden');
     hudEl.classList.add('hidden');
     menuEl.classList.remove('hidden');
-    resetPauseControls();
     openMainMenu();
     document.exitPointerLock();
     input.release();
@@ -1302,8 +1316,7 @@ export function createGame(canvas) {
     if (!started || suppressEsc) return;
     event.preventDefault();
     if (paused) {
-      if (!pauseHomeEl.hidden) closePause();
-      else resetPauseControls();
+      if (mapFromGame || !backPage()) closePause();
     } else {
       openPause();
     }
@@ -1331,6 +1344,8 @@ export function createGame(canvas) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     elapsed += dt;
+
+    if (started && input.consume('map')) toggleMap();
 
     if (paused) {
       renderer.render(scene, camera);

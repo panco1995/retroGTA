@@ -1,6 +1,6 @@
 import { onLangChange, t } from './i18n.js';
 
-const ACTIONS = ['forward', 'back', 'left', 'right', 'run', 'brake', 'attack', 'interact', 'camera'];
+const ACTIONS = ['forward', 'back', 'left', 'right', 'run', 'brake', 'attack', 'interact', 'camera', 'map'];
 
 const LABELS = {
   forward: 'bindForward',
@@ -12,6 +12,7 @@ const LABELS = {
   brake: 'bindBrake',
   interact: 'bindInteract',
   camera: 'bindCamera',
+  map: 'bindMap',
 };
 
 const DEFAULTS = {
@@ -24,6 +25,7 @@ const DEFAULTS = {
   brake: 'Space',
   interact: 'KeyE',
   camera: 'KeyV',
+  map: 'KeyM',
 };
 
 const storageKey = 'retrogta.keys';
@@ -134,6 +136,7 @@ export function keyVars() {
     brake: keyName(bindings.brake),
     interact: keyName(bindings.interact),
     camera: keyName(bindings.camera),
+    map: keyName(bindings.map),
   };
 }
 
@@ -176,29 +179,6 @@ function assign(action, code) {
   notify();
 }
 
-function pauseControlsOpen() {
-  const pause = document.getElementById('pause');
-  const panel = document.getElementById('pause-controls-panel');
-  return Boolean(pause && panel && !pause.classList.contains('hidden') && !panel.hidden);
-}
-
-function showPauseHome() {
-  cancelCapture();
-  const home = document.getElementById('pause-home');
-  const pause = document.getElementById('pause');
-  if (home) home.hidden = false;
-  if (pause) {
-    pause.querySelectorAll('.menu-panel').forEach((panel) => {
-      panel.hidden = true;
-    });
-  }
-  document.body.classList.remove('rebinding');
-}
-
-export function resetPauseControls() {
-  showPauseHome();
-}
-
 function startCapture(action) {
   listening = action;
   refreshButtons();
@@ -231,30 +211,17 @@ function resetBindings() {
 
 export function initBindings() {
   mount(document.getElementById('controls'));
-  mount(document.getElementById('pause-controls-list'));
   refreshCopy();
   onLangChange(refreshCopy);
 
   document.getElementById('controls-reset').addEventListener('click', resetBindings);
-  document.getElementById('pause-controls-reset').addEventListener('click', resetBindings);
-  document.getElementById('pause-controls').addEventListener('click', () => {
-    cancelCapture();
-    document.getElementById('pause-home').hidden = true;
-    document.getElementById('pause-controls-panel').hidden = false;
-    document.body.classList.add('rebinding');
-  });
-  document.getElementById('pause-controls-back').addEventListener('click', showPauseHome);
 
   window.addEventListener('keydown', (event) => {
-    if (event.repeat) return;
-    const capturing = listening !== null;
-    const backToPause = !capturing && event.code === 'Escape' && pauseControlsOpen();
-    if (!capturing && !backToPause) return;
+    if (event.repeat || listening === null) return;
     event.preventDefault();
     event.stopPropagation();
-    if (backToPause || event.code === 'Escape' || event.code === 'Unidentified') {
-      if (backToPause) showPauseHome();
-      else cancelCapture();
+    if (event.code === 'Escape' || event.code === 'Unidentified') {
+      cancelCapture();
       return;
     }
     assign(listening, event.code);

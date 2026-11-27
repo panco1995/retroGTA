@@ -3,9 +3,9 @@ const packs = {
     place: 'East Island',
     sub: 'Safehouse',
     onFoot: 'On foot',
-    hintFollow: '{move} move · {run} run · {jump} jump · {attack} attack · Mouse look · {camera} camera · {interact} enter · Esc pause',
-    hintFixed: '{move} move · {run} run · {jump} jump · {attack} attack · {camera} {view} · {interact} enter · Esc pause',
-    hintDrive: '{move} drive · {brake} brake · {interact} exit · {camera} {view} · Esc pause',
+    hintFollow: '{move} move · {run} run · {jump} jump · {attack} attack · Mouse look · {camera} camera · {interact} enter · {map} map · Esc pause',
+    hintFixed: '{move} move · {run} run · {jump} jump · {attack} attack · {camera} {view} · {interact} enter · {map} map · Esc pause',
+    hintDrive: '{move} drive · {brake} brake · {interact} exit · {camera} {view} · {map} map · Esc pause',
     enterCar: 'Get in',
     stealCar: 'Steal car',
     exitCar: 'Exit',
@@ -17,7 +17,7 @@ const packs = {
     viewTop: 'Top-down',
     viewIso: '2.5D',
     bootKicker: 'East Island',
-    bootKeys: '{move} move · {run} run · {jump} jump · {attack} attack · Mouse look · {camera} top-down / 2.5D · {interact} enter or exit · {brake} brake · Esc pause',
+    bootKeys: '{move} move · {run} run · {jump} jump · {attack} attack · Mouse look · {camera} top-down / 2.5D · {interact} enter or exit · {brake} brake · {map} map · Esc pause',
     bindForward: 'Forward',
     bindBack: 'Back',
     bindLeft: 'Left',
@@ -27,6 +27,7 @@ const packs = {
     bindBrake: 'Jump / brake',
     bindInteract: 'Enter / exit',
     bindCamera: 'Camera',
+    bindMap: 'Map',
     controls: 'Controls',
     controlsReset: 'Reset keys',
     pressKey: 'Press a key or mouse button',
@@ -34,7 +35,6 @@ const packs = {
     mouseMiddle: 'MMB',
     mouseRight: 'RMB',
     pauseMap: 'Map',
-    pauseControls: 'Controls',
     pauseCheats: 'Cheats',
     cheatSpawn: 'Spawn vehicle',
     cheatVehicle: 'Vehicle',
@@ -79,7 +79,6 @@ const packs = {
     language: 'Language',
     pauseTitle: 'Paused',
     pauseResume: 'Resume',
-    pauseLang: 'Switch language',
     pauseRestart: 'Restart',
     pauseExit: 'Exit',
     aboutCopy: 'A GTA-like game on the east island. The coast, diagonal road, and bridge are in; buildings are still simple.',
@@ -88,9 +87,9 @@ const packs = {
     place: '东岛',
     sub: '安全屋',
     onFoot: '徒步',
-    hintFollow: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · 鼠标 视角 · {camera} 切换 · {interact} 上车 · Esc 暂停',
-    hintFixed: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · {camera} {view} · {interact} 上车 · Esc 暂停',
-    hintDrive: '{move} 驾驶 · {brake} 刹车 · {interact} 下车 · {camera} {view} · Esc 暂停',
+    hintFollow: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · 鼠标 视角 · {camera} 切换 · {interact} 上车 · {map} 地图 · Esc 暂停',
+    hintFixed: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · {camera} {view} · {interact} 上车 · {map} 地图 · Esc 暂停',
+    hintDrive: '{move} 驾驶 · {brake} 刹车 · {interact} 下车 · {camera} {view} · {map} 地图 · Esc 暂停',
     enterCar: '上车',
     stealCar: '抢车',
     exitCar: '下车',
@@ -102,7 +101,7 @@ const packs = {
     viewTop: '俯视',
     viewIso: '2.5D',
     bootKicker: '东岛',
-    bootKeys: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · 鼠标 转视角 · {camera} 俯视 / 2.5D · {interact} 上下车 · {brake} 刹车 · Esc 暂停',
+    bootKeys: '{move} 移动 · {run} 奔跑 · {jump} 跳跃 · {attack} 攻击 · 鼠标 转视角 · {camera} 俯视 / 2.5D · {interact} 上下车 · {brake} 刹车 · {map} 地图 · Esc 暂停',
     bindForward: '前进',
     bindBack: '后退',
     bindLeft: '向左',
@@ -112,6 +111,7 @@ const packs = {
     bindBrake: '跳跃 / 刹车',
     bindInteract: '上下车',
     bindCamera: '切换视角',
+    bindMap: '地图',
     controls: '按键',
     controlsReset: '恢复默认',
     pressKey: '请按键或鼠标',
@@ -119,7 +119,6 @@ const packs = {
     mouseMiddle: '中键',
     mouseRight: '右键',
     pauseMap: '地图',
-    pauseControls: '按键设置',
     pauseCheats: '作弊',
     cheatSpawn: '呼出载具',
     cheatVehicle: '载具',
@@ -164,7 +163,6 @@ const packs = {
     language: '语言',
     pauseTitle: '暂停',
     pauseResume: '继续游戏',
-    pauseLang: '切换语言',
     pauseRestart: '重新开始',
     pauseExit: '退出',
     aboutCopy: '类 GTA 游戏，场景在东岛。海岸、斜路和大桥已经铺上，房子仍是简模。',
@@ -172,10 +170,17 @@ const packs = {
 };
 
 const htmlLang = { en: 'en', zh: 'zh-CN' };
+// Language names are always shown in their own language, so they do not come
+// from a pack and each new pack only needs an entry here.
+const languageNames = { en: 'English', zh: '中文' };
 const storageKey = 'retrogta.lang';
 const listeners = new Set();
 
 let current = 'en';
+
+export function languageName(code) {
+  return languageNames[code] ?? code;
+}
 
 function fill(template, vars) {
   if (!vars) return template;
@@ -221,13 +226,23 @@ export function setLang(next) {
   listeners.forEach((listener) => listener(current));
 }
 
-export function toggleLang() {
-  setLang(current === 'zh' ? 'en' : 'zh');
+function mountLanguages() {
+  const root = document.getElementById('lang-options');
+  if (!root) return;
+  root.replaceChildren();
+  for (const code of Object.keys(packs)) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.lang = code;
+    button.textContent = languageName(code);
+    root.append(button);
+  }
 }
 
 export function initI18n() {
   const saved = localStorage.getItem(storageKey);
   current = packs[saved] ? saved : 'en';
+  mountLanguages();
   applyStatic();
 
   document.querySelectorAll('[data-lang]').forEach((el) => {

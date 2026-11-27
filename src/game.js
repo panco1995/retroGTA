@@ -18,7 +18,7 @@ import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
 import { keyVars, onBindingsChange } from './bindings.js';
 import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseHome } from './menu.js';
-import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
+import { VEHICLE_COLORS, VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
 
 const VIEW_ORDER = ['follow', 'first', 'top', 'iso'];
@@ -48,24 +48,6 @@ const PERSON_MASS = 1;
 const PERSON_HIT_INSET = 0.12;
 const GRAVITY = 24;
 const ATTACK_RANGE = 1.9;
-
-const CHEAT_COLORS = {
-  sedan: '#3f4a52',
-  taxi: '#d6ae2b',
-  hatchback: '#c8c2b4',
-  suv: '#23342c',
-  pickup: '#8a4a2c',
-  sports: '#a32121',
-  van: '#2c3136',
-  bus: '#2f6b4f',
-  truck: '#c9c4b8',
-  excavator: '#d9a520',
-  tractor: '#2f6b3a',
-  ambulance: '#f2f0e8',
-  firetruck: '#c02626',
-  police: '#f2f0e8',
-  mixer: '#d9a520',
-};
 
 export function createGame(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -398,7 +380,7 @@ export function createGame(canvas) {
       z: spot.z,
       heading: facing,
       type,
-      color: CHEAT_COLORS[type] ?? '#8a8f92',
+      color: VEHICLE_COLORS[type] ?? 0x8a8f92,
       driveable: true,
     });
     vehicle.cheat = true;

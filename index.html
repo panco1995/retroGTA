@@ -33,6 +33,7 @@
       <div class="menu-card">
         <nav id="menu-home" class="menu-list">
           <button type="button" id="menu-start" data-i18n="menuStart"></button>
+          <button type="button" data-page="collection" data-i18n="menuCollection"></button>
           <button type="button" data-page="settings" data-i18n="menuSettings"></button>
           <button type="button" data-page="about" data-i18n="menuAbout"></button>
         </nav>
@@ -88,6 +89,7 @@
           <button type="button" data-page="settings" data-i18n="menuSettings"></button>
           <button type="button" data-page="map" data-i18n="pauseMap"></button>
           <button type="button" data-page="cheats" data-i18n="pauseCheats"></button>
+          <button type="button" data-page="collection" data-i18n="menuCollection"></button>
           <button type="button" id="pause-exit" data-i18n="pauseExit"></button>
         </nav>
         <section id="pause-cheats-panel" class="menu-panel" hidden>
@@ -110,13 +112,46 @@
       </section>
     </div>
 
+    <!-- Shared by the main menu and the pause menu, like the settings panel. -->
+    <section id="collection-panel" class="collection-panel" hidden>
+      <header class="collection-head">
+        <div class="collection-title" data-i18n="menuCollection"></div>
+        <div id="collection-tabs" class="collection-tabs" role="tablist">
+          <button type="button" role="tab" data-collection-tab="vehicles" data-i18n="collectionVehicles"></button>
+          <button type="button" role="tab" data-collection-tab="people" data-i18n="collectionPeople"></button>
+          <button type="button" role="tab" data-collection-tab="props" data-i18n="collectionProps"></button>
+        </div>
+        <button type="button" id="collection-back" class="collection-close" data-page="back" data-i18n="menuBack"></button>
+      </header>
+      <div class="collection-body">
+        <nav id="collection-list" class="collection-list"></nav>
+        <div class="collection-stage">
+          <canvas id="collection-canvas"></canvas>
+        </div>
+      </div>
+      <footer class="collection-foot">
+        <div id="collection-hint" class="collection-hint"></div>
+        <div class="collection-nav">
+          <button type="button" id="collection-prev" class="collection-arrow" data-i18n-aria="collectionPrev">‹</button>
+          <div class="collection-caption">
+            <div id="collection-name" class="collection-name"></div>
+            <div id="collection-count" class="collection-count"></div>
+          </div>
+          <button type="button" id="collection-next" class="collection-arrow" data-i18n-aria="collectionNext">›</button>
+        </div>
+        <button type="button" id="collection-interior" class="collection-view" data-i18n="collectionInterior" aria-pressed="false" hidden></button>
+      </footer>
+    </section>
+
     <script type="module">
       import { initI18n } from '/src/i18n.js';
       import { initMenu } from '/src/menu.js';
       import { initBindings } from '/src/bindings.js';
+      import { initCollection } from '/src/collection.js';
       initI18n();
       initMenu();
       initBindings();
+      initCollection();
     </script>
     <script type="module" src="/src/main.js"></script>
   </body>

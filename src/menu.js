@@ -45,11 +45,17 @@ export function showPage(menu, page) {
   }
 
   // Every menu page shares one footer back button, so it always sits in the
-  // same spot; the full-screen map brings its own.
-  document.getElementById('menu-back').hidden = !(menu === 'menu' && page !== 'home');
-  document.getElementById('pause-back').hidden = !(
-    menu === 'pause' && page !== 'home' && page !== 'map'
+  // same spot; the full-screen map and collection bring their own.
+  document.getElementById('menu-back').hidden = !(
+    menu === 'menu' && page !== 'home' && page !== 'collection'
   );
+  document.getElementById('pause-back').hidden = !(
+    menu === 'pause' && page !== 'home' && page !== 'map' && page !== 'collection'
+  );
+
+  // The collection gallery is a full-screen page shared by both menus, so it
+  // lives outside them and is toggled here.
+  document.getElementById('collection-panel').hidden = page !== 'collection';
 
   const panel = document.getElementById('settings-panel');
   const inSettings = Object.hasOwn(SETTINGS_PAGES, page);
@@ -103,11 +109,15 @@ export function initMenu() {
   document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-page]');
     if (!trigger) return;
+    event.preventDefault();
+    // The collection page's back button lives outside both menus.
+    if (trigger.dataset.page === 'back') {
+      backPage();
+      return;
+    }
     const menu = trigger.closest('#menu, #pause');
     if (!menu) return;
-    event.preventDefault();
-    if (trigger.dataset.page === 'back') backPage();
-    else showPage(menu.id, trigger.dataset.page);
+    showPage(menu.id, trigger.dataset.page);
   });
 
   // The pause menu's Escape handling lives in game.js; this only backs out of

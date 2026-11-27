@@ -1067,6 +1067,26 @@ const BUILDERS = {
 
 export const VEHICLE_TYPES = Object.keys(BUILDERS);
 
+// Suggested paint for each type. The cheat menu and the collection gallery
+// share it, so a car looks the same wherever it is shown.
+export const VEHICLE_COLORS = {
+  sedan: 0x3f4a52,
+  taxi: 0xd6ae2b,
+  hatchback: 0xc8c2b4,
+  suv: 0x23342c,
+  pickup: 0x8a4a2c,
+  sports: 0xa32121,
+  van: 0x2c3136,
+  bus: 0x2f6b4f,
+  truck: 0xc9c4b8,
+  excavator: 0xd9a520,
+  tractor: 0x2f6b3a,
+  ambulance: 0xf2f0e8,
+  firetruck: 0xc02626,
+  police: 0xf2f0e8,
+  mixer: 0xd9a520,
+};
+
 const footprints = new Map();
 
 export function vehicleFootprint(type) {

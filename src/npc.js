@@ -321,6 +321,10 @@ const KINDS = [
   },
 ];
 
+// The gallery shows one look per kind, so it can stay in step with the crowd
+// without duplicating the outfit tables.
+export const PED_KINDS = KINDS;
+
 const TOTAL_WEIGHT = KINDS.reduce((sum, kind) => sum + kind.weight, 0);
 
 function weightedKind() {

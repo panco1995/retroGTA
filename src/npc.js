@@ -525,6 +525,8 @@ export function createPedestrianCrowd({
       const arm = actor.parts.rightArm;
       arm.rotation.x = -1.25;
       arm.rotation.z += (-0.16 - arm.rotation.z) * Math.min(1, dt * 8);
+      // The forearm folds up so the hand holds the phone in front of the face.
+      actor.parts.rightFore.rotation.x = -0.95;
     } else {
       actor.parts.rightArm.rotation.z += (0 - actor.parts.rightArm.rotation.z) * Math.min(1, dt * 8);
     }

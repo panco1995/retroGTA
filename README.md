@@ -158,7 +158,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Builds roads, buildings, the elevated track, colliders, and the lane/sidewalk networks |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
-| `src/actor.js` | Low-poly person model, walk cycle, seated pose, and the knocked-down pose |
+| `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders |

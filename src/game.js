@@ -1278,6 +1278,7 @@ export function createGame(canvas) {
     input.lock();
   });
 
+  document.getElementById('pause-resume').addEventListener('click', () => closePause());
   document.getElementById('pause-lang').addEventListener('click', () => toggleLang());
   document.getElementById('pause-restart').addEventListener('click', () => {
     resetSession();

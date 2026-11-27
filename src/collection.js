@@ -235,6 +235,7 @@ let camera = null;
 let pivot = null;
 let plate = null;
 let keyLight = null;
+let cabinLight = null;
 let viewer = null;
 let frameHandle = 0;
 let lastTime = 0;
@@ -254,6 +255,7 @@ let lookPitch = -0.1;
 
 const eyePoint = new THREE.Vector3();
 const forwardDir = new THREE.Vector3();
+const lampPoint = new THREE.Vector3();
 
 function itemsOf(catIndex) {
   return CATEGORIES[catIndex].items;
@@ -299,6 +301,13 @@ function ensureViewer() {
   const rim = new THREE.DirectionalLight(0xf0d48a, 0.55);
   rim.position.set(-3, 3, 9);
   scene.add(rim);
+
+  // The roof and the body shut the sun out of the cabin, so the driver's seat
+  // would be almost black. This lamp hangs above the seat and only comes on
+  // for the interior view; its short range keeps it off the paint outside.
+  cabinLight = new THREE.PointLight(0xffe6c8, 0, 2.2, 2);
+  cabinLight.position.set(0, 1.6, 0);
+  scene.add(cabinLight);
 
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(60, 64),
@@ -396,19 +405,25 @@ function mount(item) {
   }
 
   const group = built.isObject3D ? built : built.group;
-  // Only vehicles carry a seat and a windshield; a cab with glass gets the
-  // interior view, while the open tractors and the like do not.
+  // Only vehicles carry a seat, a windshield and a modelled cabin; the open
+  // tractors and the like have none, so they skip the interior view.
   viewer = built.isObject3D
-    ? { group, seat: null, windshield: null }
-    : { group, seat: built.seat ?? null, windshield: built.windshield ?? null };
+    ? { group, seat: null, windshield: null, cabin: false }
+    : {
+        group,
+        seat: built.seat ?? null,
+        windshield: built.windshield ?? null,
+        cabin: !!built.steering,
+      };
 
   pivot.add(group);
 
   interior = false;
+  if (cabinLight) cabinLight.intensity = 0;
   camera.fov = EXTERIOR_FOV;
   camera.updateProjectionMatrix();
   frameModel(size);
-  if (keepInterior && viewer.windshield && viewer.seat) setInterior(true);
+  if (keepInterior && interiorAvailable()) setInterior(true);
   updateInteriorButton();
   updateHint();
 }
@@ -418,6 +433,12 @@ function updateInteriorCamera() {
   viewer.group.updateWorldMatrix(true, false);
   eyePoint.set(viewer.seat.x, viewer.seat.y, viewer.seat.z);
   viewer.group.localToWorld(eyePoint);
+  // Hang the cabin lamp over the middle of the cabin, between the two seats,
+  // just below eye level so it lights the dash and the upholstery without
+  // burning a hot spot into the headliner.
+  lampPoint.set(0, viewer.seat.y - 0.02, viewer.seat.z + 0.12);
+  viewer.group.localToWorld(lampPoint);
+  cabinLight.position.copy(lampPoint);
   // Look around from the seat. Yaw is measured so that dragging the pointer
   // right swings the view right; pitch is dipped a little by default so the
   // dashboard and the top of the steering wheel sit in frame.
@@ -434,7 +455,7 @@ function updateInteriorCamera() {
 }
 
 function interiorAvailable() {
-  return !!(viewer?.seat && viewer.windshield);
+  return !!(viewer?.seat && viewer.windshield && viewer.cabin);
 }
 
 function updateInteriorButton() {
@@ -452,13 +473,14 @@ function updateHint() {
 }
 
 function setInterior(on) {
-  const next = !!(on && viewer?.seat && viewer.windshield);
+  const next = !!(on && viewer?.seat && viewer.windshield && viewer.cabin);
   if (interior === next) {
     updateInteriorButton();
     return;
   }
   interior = next;
   if (viewer.windshield) viewer.windshield.visible = !interior;
+  if (cabinLight) cabinLight.intensity = interior ? 1.7 : 0;
   camera.fov = interior ? INTERIOR_FOV : EXTERIOR_FOV;
   camera.updateProjectionMatrix();
   if (interior) {

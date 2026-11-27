@@ -86,6 +86,12 @@ export function createGame(canvas) {
   fill.position.set(-36, 28, -24);
   scene.add(fill);
 
+  // Sunlight never reaches the driver's seat, so the first person driving
+  // view gets its own short range lamp in the cabin. It is parked at the
+  // player's car only while that view is on.
+  const cabinLight = new THREE.PointLight(0xffe6c8, 0, 2.4, 2);
+  scene.add(cabinLight);
+
   const world = buildCity();
   scene.add(world.group);
 
@@ -1496,6 +1502,8 @@ export function createGame(canvas) {
 
   function updateCamera(dt, snap) {
     const driving = started && mode === 'drive';
+    // Only the driver's seat camera wants the cabin lamp.
+    cabinLight.intensity = 0;
     const targetX = driving ? hero.x : player.x;
     const targetZ = driving ? hero.z : player.z;
     const gy = world.ground(targetX, targetZ);
@@ -1535,6 +1543,13 @@ export function createGame(canvas) {
       desired.set(hero.seat.x, hero.seat.y, hero.seat.z);
       hero.group.localToWorld(desired);
       camera.position.copy(desired);
+      // Hang the lamp a little ahead of the eyes, between the seats.
+      cabinLight.position.set(
+        desired.x + Math.sin(hero.heading) * 0.12,
+        desired.y - 0.02,
+        desired.z + Math.cos(hero.heading) * 0.12,
+      );
+      cabinLight.intensity = 1.6;
       camReady = true;
       const cp = Math.cos(pitch);
       look.set(

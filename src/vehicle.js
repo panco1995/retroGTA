@@ -326,6 +326,56 @@ function quadPane(group, corners, mat, color) {
 // panes instead of one solid cabin block. The side glass is split by the B
 // pillar, so doors and windows stay readable from the third person camera
 // instead of dissolving into a single tinted slab.
+// The lower body of a passenger car. The top is capped over the hood, the boot
+// and the door ledges, but left open over the cabin, so the interior floor can
+// sit below the belt line. The greenhouse roof and glass close the opening
+// from above, so the car still looks solid from outside.
+function addCarBody(group, paint, {
+  w, bottom, top, zFront, zBack, cabinFrontZ, cabinRearZ, cabinHalfW, wall = 0.06,
+}) {
+  const inner = w - wall * 2;
+  const depth = Math.abs(zFront - zBack);
+  const zMid = (zFront + zBack) / 2;
+  const wallH = top - bottom - 0.08;
+
+  // Floor pan, then the four walls. The front and rear walls sit between the
+  // side walls so no two outer faces land on the same plane.
+  part(group, w, 0.08, depth, paint, 0, bottom + 0.04, zMid);
+  for (const side of [-1, 1]) {
+    part(group, wall, wallH, depth, paint, side * (w / 2 - wall / 2), bottom + 0.08 + wallH / 2, zMid);
+  }
+  part(group, inner, wallH, wall, paint, 0, bottom + 0.08 + wallH / 2, zFront - wall / 2);
+  part(group, inner, wallH, wall, paint, 0, bottom + 0.08 + wallH / 2, zBack + wall / 2);
+
+  // Top caps over the hood and the boot, plus the ledges under the side glass.
+  const capT = 0.08;
+  const capY = top - capT / 2;
+  const hoodLen = zFront - wall - cabinFrontZ;
+  if (hoodLen > 0) {
+    part(group, inner, capT, hoodLen, paint, 0, capY, cabinFrontZ + hoodLen / 2);
+  }
+  const deckLen = cabinRearZ - (zBack + wall);
+  if (deckLen > 0) {
+    part(group, inner, capT, deckLen, paint, 0, capY, zBack + wall + deckLen / 2);
+  }
+  const ledgeW = w / 2 - wall - cabinHalfW;
+  if (ledgeW > 0) {
+    const cabinLen = cabinFrontZ - cabinRearZ;
+    for (const side of [-1, 1]) {
+      part(
+        group,
+        ledgeW,
+        capT,
+        cabinLen,
+        paint,
+        side * (cabinHalfW + ledgeW / 2),
+        capY,
+        (cabinFrontZ + cabinRearZ) / 2,
+      );
+    }
+  }
+}
+
 function addGreenhouse(group, {
   paint,
   bodyColor,
@@ -341,6 +391,7 @@ function addGreenhouse(group, {
   cPillarZ = null,
   pillar = 0.085,
   roofT = 0.1,
+  floorY = null,
 }) {
   const { seam, accent } = trimPalette(bodyColor);
   const zMid = (roofFrontZ + roofRearZ) / 2;
@@ -378,7 +429,7 @@ function addGreenhouse(group, {
       ], GLASS_MAT, SIDE_GLASS);
       // Waistline strip under each pane and a rail along its top, so the glass
       // sits in a frame of bright trim instead of bleeding into the paint.
-      part(group, 0.035, 0.05, Math.abs(z1 - z0) - 0.02, TRIM_MAT, side * (beltHalfW + 0.012), beltY + 0.055, (z0 + z1) / 2, accent);
+      part(group, 0.035, 0.05, Math.abs(z1 - z0) - 0.02, TRIM_MAT, side * (beltHalfW + 0.012), beltY + 0.01, (z0 + z1) / 2, accent);
       part(group, 0.045, 0.035, Math.abs(topSplits[i + 1] - topSplits[i]) - 0.02, TRIM_MAT, side * (roofHalfW + 0.012), glassTopY, (topSplits[i] + topSplits[i + 1]) / 2, accent);
       // Drip rail along the roof edge.
       part(group, 0.04, 0.04, Math.abs(topSplits[i + 1] - topSplits[i]), TRIM_MAT, side * (roofHalfW + 0.02), roofY - 0.005, (topSplits[i] + topSplits[i + 1]) / 2, seam);
@@ -429,6 +480,50 @@ function addGreenhouse(group, {
   part(group, screenW, 0.06, 0.07, TRIM_MAT, 0, beltY + 0.02, rearZ - 0.02, accent);
   part(group, roofW, 0.05, 0.07, TRIM_MAT, 0, roofY - 0.015, roofFrontZ, accent);
   part(group, roofW, 0.05, 0.07, TRIM_MAT, 0, roofY - 0.015, roofRearZ, accent);
+
+  // The cabin lining: a low floor, door cards up past the belt, front and rear
+  // bulkheads and a headliner. The lower body is open over the cabin, so this
+  // is what the interior camera actually sits inside.
+  if (floorY !== null) {
+    // Grey rather than near-black: the roof cuts the sun off the cabin, so
+    // these surfaces are lit by the hemisphere and the cabin lamp alone.
+    const lining = 0x2c3136;
+    const panel = 0x373d42;
+    const headliner = 0x3e444a;
+    const cabW = (beltHalfW - 0.04) * 2;
+    const cabinLen = Math.abs(frontZ - rearZ);
+    const cabinMid = (frontZ + rearZ) / 2;
+    const sideTop = beltY + 0.08;
+    part(group, cabW, 0.06, cabinLen, TRIM_MAT, 0, floorY, cabinMid, lining);
+    for (const side of [-1, 1]) {
+      part(
+        group,
+        0.04,
+        sideTop - floorY,
+        cabinLen,
+        TRIM_MAT,
+        side * (beltHalfW - 0.03),
+        (floorY + sideTop) / 2,
+        cabinMid,
+        panel,
+      );
+    }
+    part(group, cabW, beltY - floorY, 0.05, TRIM_MAT, 0, (floorY + beltY) / 2, frontZ - 0.03, panel);
+    part(group, cabW, beltY - floorY, 0.05, TRIM_MAT, 0, (floorY + beltY) / 2, rearZ + 0.03, panel);
+    part(
+      group,
+      (roofHalfW - 0.04) * 2,
+      0.04,
+      Math.abs(roofFrontZ - roofRearZ) - 0.04,
+      TRIM_MAT,
+      0,
+      roofY - 0.02,
+      (roofFrontZ + roofRearZ) / 2,
+      headliner,
+    );
+    group.userData.cabinFloorY = floorY;
+  }
+  group.userData.cabinFrontZ = frontZ;
   return windshield;
 }
 
@@ -442,12 +537,30 @@ function addWheelArches(group, wheels, halfW, bodyColor) {
     const geo = new THREE.TorusGeometry(radius, 0.035, 4, 12, Math.PI);
     geo.rotateY(Math.PI / 2);
     paintGeo(geo, accent);
+    const pos = wheel.steer.position;
     for (const side of [-1, 1]) {
       const mesh = new THREE.Mesh(geo.clone(), TRIM_MAT);
-      mesh.position.set(side * (halfW + 0.03), wheel.steer.position.y, wheel.steer.position.z);
+      mesh.position.set(side * (halfW + 0.03), pos.y, pos.z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       group.add(mesh);
+    }
+    // Inner fender. The body is hollow over the cabin now, so without this the
+    // top of a tyre pokes through the door card into the cabin.
+    const scale = wheel.radius / 0.34;
+    const innerX = Math.abs(pos.x) - 0.12 * scale - 0.02;
+    for (const side of [-1, 1]) {
+      part(
+        group,
+        0.04,
+        wheel.radius * 2 + 0.15,
+        wheel.radius * 2 + 0.16,
+        TRIM_MAT,
+        side * innerX,
+        pos.y,
+        pos.z,
+        0x16191c,
+      );
     }
   }
 }
@@ -465,34 +578,111 @@ function frameSideWindow(group, side, x, y, z, h, d, color) {
 
 // A dashboard and a steering wheel, so the first person camera has something
 // to sit behind. The body shell is invisible from the inside, so without these
-// the driver view is nothing but the road.
-function addCabinInterior(group, mat, built, seat, windshield) {
+// the driver view is nothing but the road. Distances are measured from the
+// seat: a wheel at arm's length instead of against the lens, with a shallow
+// dash and a column behind it.
+function addCabinInterior(group, mat, built, seat) {
   const eyeY = seat.y;
-  const frontZ = windshield.position.z;
-  part(group, built.width * 0.8, 0.18, 0.42, mat, 0, eyeY - 0.31, frontZ - 0.28);
+  // Run the dash from just behind the wheel to the firewall, so it reads as a
+  // full-width dashboard rather than a slab floating mid-cabin.
+  const dashFront = (group.userData.cabinFrontZ ?? seat.z + 0.8) - 0.08;
+  const dashBack = seat.z + 0.55;
+  const dashDepth = Math.max(0.12, dashFront - dashBack);
+  part(group, built.width * 0.8, 0.16, dashDepth, mat, 0, eyeY - 0.31, (dashFront + dashBack) / 2, 0x2f353a);
 
   const hub = new THREE.Group();
-  hub.position.set(seat.x, eyeY - 0.28, frontZ - 0.56);
+  hub.position.set(seat.x, eyeY - 0.3, seat.z + 0.48);
   hub.rotation.x = 0.35;
   const spin = new THREE.Group();
-  const rim = new THREE.TorusGeometry(0.17, 0.028, 6, 14);
-  rim.rotateX(0);
-  const boss = new THREE.BoxGeometry(0.08, 0.07, 0.07);
-  const spoke = new THREE.BoxGeometry(0.06, 0.16, 0.05);
-  spoke.translate(0, -0.1, 0);
-  const wheel = paintGeo(mergeGeometries([rim, boss, spoke], false), 0x1b1f23);
+  const rim = new THREE.TorusGeometry(0.16, 0.026, 6, 14);
+  const boss = new THREE.BoxGeometry(0.07, 0.065, 0.065);
+  const spoke = new THREE.BoxGeometry(0.055, 0.15, 0.045);
+  spoke.translate(0, -0.095, 0);
+  const wheel = paintGeo(mergeGeometries([rim, boss, spoke], false), 0x24292e);
   const mesh = new THREE.Mesh(wheel, mat);
   mesh.castShadow = true;
   spin.add(mesh);
   hub.add(spin);
   group.add(hub);
+
+  // Column from the wheel back to the dash.
+  part(group, 0.07, 0.07, 0.16, mat, seat.x, eyeY - 0.33, seat.z + 0.53, 0x24292e);
+
+  // Driver and passenger seats, with a pedestal down to the cabin floor, plus
+  // a low console between them. The floor comes from the cabin lining built by
+  // the greenhouse (cars) or the cab shell (vans, buses, trucks).
+  const floorY = group.userData.cabinFloorY ?? eyeY - 0.72;
+  const cushionTop = eyeY - 0.4;
+  const cushionH = 0.15;
+  const cushionBottom = cushionTop - cushionH;
+  const passengerX = seat.x === 0 ? 0.36 : -seat.x;
+  for (const x of [seat.x, passengerX]) {
+    part(group, 0.52, cushionH, 0.52, mat, x, cushionTop - cushionH / 2, seat.z + 0.05, 0x3d4349);
+    const pedestalH = Math.max(0.06, cushionBottom - floorY);
+    part(group, 0.4, pedestalH, 0.4, mat, x, floorY + pedestalH / 2, seat.z + 0.05, 0x272c30);
+    const back = part(group, 0.52, 0.58, 0.13, mat, x, cushionTop + 0.26, seat.z - 0.27, 0x3d4349);
+    back.rotation.x = -0.12;
+  }
+  part(group, 0.18, 0.34, 0.85, mat, 0, floorY + 0.17, seat.z - 0.08, 0x272c30);
   return spin;
+}
+
+// The box-bodied vehicles are one painted shell, and a box is invisible from
+// the inside. This lining gives the cab a floor, headliner and door cards,
+// closes the back, and frames the windshield opening, so the interior view
+// looks out through the windshield instead of straight through the body.
+function addCabShell(group, spec) {
+  const {
+    cx = 0, halfW, floorY, roofY, frontZ, backZ,
+    windowBottomY, windowTopY, glassHalfW, glassBottomY, glassTopY,
+  } = spec;
+  const depth = frontZ - backZ;
+  const zMid = (frontZ + backZ) / 2;
+  const lining = 0x272c31;
+  const headliner = 0x383e44;
+
+  part(group, halfW * 2, 0.05, depth, TRIM_MAT, cx, floorY + 0.025, zMid, lining);
+  part(group, halfW * 2, 0.05, depth, TRIM_MAT, cx, roofY - 0.025, zMid, headliner);
+
+  for (const side of [-1, 1]) {
+    const x = cx + side * (halfW - 0.02);
+    part(group, 0.04, windowBottomY - floorY, depth, TRIM_MAT, x, (floorY + windowBottomY) / 2, zMid, lining);
+    part(group, 0.04, roofY - windowTopY, depth, TRIM_MAT, x, (windowTopY + roofY) / 2, zMid, headliner);
+  }
+
+  // Rear bulkhead behind the seats.
+  part(group, halfW * 2, roofY - floorY, 0.06, TRIM_MAT, cx, (floorY + roofY) / 2, backZ + 0.03, lining);
+
+  // Firewall under the windshield, header above it, and a pillar either side.
+  const zFront = frontZ - 0.03;
+  part(group, halfW * 2, glassBottomY - floorY, 0.06, TRIM_MAT, cx, (floorY + glassBottomY) / 2, zFront, lining);
+  part(group, halfW * 2, roofY - glassTopY, 0.06, TRIM_MAT, cx, (glassTopY + roofY) / 2, zFront, headliner);
+  for (const side of [-1, 1]) {
+    part(
+      group,
+      halfW - glassHalfW,
+      roofY - floorY,
+      0.06,
+      TRIM_MAT,
+      cx + (side * (glassHalfW + halfW)) / 2,
+      (floorY + roofY) / 2,
+      zFront,
+      lining,
+    );
+  }
+  group.userData.cabinFloorY = floorY;
+  group.userData.cabinFrontZ = frontZ;
 }
 
 function buildSedan(group, color, taxi) {
   const paint = solid(color, 0.55, 0.08);
   const dark = TRIM_MAT;
-  part(group, 1.78, 0.5, 4.35, paint, 0, 0.72, 0);
+  addCarBody(group, paint, {
+    w: 1.78, bottom: 0.47, top: 0.97,
+    zFront: 2.175, zBack: -2.175,
+    cabinFrontZ: 0.8, cabinRearZ: -1.25,
+    cabinHalfW: 0.8,
+  });
   addGreenhouse(group, {
     paint, bodyColor: color,
     beltY: 0.97, roofY: 1.64,
@@ -500,6 +690,7 @@ function buildSedan(group, color, taxi) {
     roofFrontZ: 0.48, roofRearZ: -1.05,
     beltHalfW: 0.8, roofHalfW: 0.72,
     bPillarZ: -0.225,
+    floorY: 0.57,
   });
   part(group, 1.82, 0.16, 0.14, dark, 0, 0.42, 2.2);
   part(group, 1.82, 0.16, 0.14, dark, 0, 0.42, -2.2);
@@ -534,7 +725,12 @@ function buildSedan(group, color, taxi) {
 function buildHatchback(group, color) {
   const paint = solid(color, 0.55, 0.08);
   const dark = TRIM_MAT;
-  part(group, 1.7, 0.5, 3.75, paint, 0, 0.7, 0);
+  addCarBody(group, paint, {
+    w: 1.7, bottom: 0.45, top: 0.95,
+    zFront: 1.875, zBack: -1.875,
+    cabinFrontZ: 0.82, cabinRearZ: -1.55,
+    cabinHalfW: 0.76,
+  });
   addGreenhouse(group, {
     paint, bodyColor: color,
     beltY: 0.95, roofY: 1.58,
@@ -542,6 +738,7 @@ function buildHatchback(group, color) {
     roofFrontZ: 0.55, roofRearZ: -1.42,
     beltHalfW: 0.76, roofHalfW: 0.69,
     bPillarZ: -0.1, cPillarZ: -1.2,
+    floorY: 0.55,
   });
   part(group, 1.74, 0.14, 0.14, dark, 0, 0.42, 1.9);
   part(group, 1.74, 0.14, 0.14, dark, 0, 0.42, -1.9);
@@ -572,7 +769,12 @@ function buildHatchback(group, color) {
 function buildSuv(group, color) {
   const paint = solid(color, 0.6, 0.06);
   const dark = TRIM_MAT;
-  part(group, 1.92, 0.78, 4.55, paint, 0, 0.92, 0);
+  addCarBody(group, paint, {
+    w: 1.92, bottom: 0.53, top: 1.31,
+    zFront: 2.275, zBack: -2.275,
+    cabinFrontZ: 1.0, cabinRearZ: -2.05,
+    cabinHalfW: 0.9,
+  });
   addGreenhouse(group, {
     paint, bodyColor: color,
     beltY: 1.31, roofY: 2.06,
@@ -580,6 +782,7 @@ function buildSuv(group, color) {
     roofFrontZ: 0.72, roofRearZ: -1.98,
     beltHalfW: 0.9, roofHalfW: 0.83,
     bPillarZ: -0.175, cPillarZ: -1.35,
+    floorY: 0.63,
   });
   part(group, 0.08, 0.08, 2.55, dark, -0.66, 2.16, -0.63);
   part(group, 0.08, 0.08, 2.55, dark, 0.66, 2.16, -0.63);
@@ -613,13 +816,19 @@ function buildPickup(group, color) {
   const dark = TRIM_MAT;
   part(group, 1.88, 0.3, 5.15, paint, 0, 0.62, 0);
   part(group, 1.86, 0.42, 1.35, paint, 0, 0.92, 1.85);
-  part(group, 1.84, 0.7, 1.75, paint, 0, 1.15, 0.55);
+  addCarBody(group, paint, {
+    w: 1.84, bottom: 0.8, top: 1.5,
+    zFront: 1.425, zBack: -0.325,
+    cabinFrontZ: 1.05, cabinRearZ: -0.05,
+    cabinHalfW: 0.8,
+  });
   addGreenhouse(group, {
     paint, bodyColor: color,
     beltY: 1.5, roofY: 2.02,
     frontZ: 1.05, rearZ: -0.05,
     roofFrontZ: 0.9, roofRearZ: -0.02,
     beltHalfW: 0.8, roofHalfW: 0.74,
+    floorY: 0.9,
   });
   part(group, 1.8, 0.16, 2.3, paint, 0, 0.92, -1.45);
   part(group, 0.08, 0.45, 2.3, paint, -0.9, 1.15, -1.45);
@@ -653,7 +862,12 @@ function buildPickup(group, color) {
 function buildSports(group, color) {
   const paint = solid(color, 0.5, 0.15);
   const dark = TRIM_MAT;
-  part(group, 1.9, 0.42, 4.35, paint, 0, 0.6, 0);
+  addCarBody(group, paint, {
+    w: 1.9, bottom: 0.39, top: 0.81,
+    zFront: 2.175, zBack: -2.175,
+    cabinFrontZ: 0.72, cabinRearZ: -1.35,
+    cabinHalfW: 0.78,
+  });
   part(group, 1.78, 0.24, 1.1, paint, 0, 0.78, 1.75);
   addGreenhouse(group, {
     paint, bodyColor: color,
@@ -662,6 +876,7 @@ function buildSports(group, color) {
     roofFrontZ: 0.42, roofRearZ: -1.15,
     beltHalfW: 0.78, roofHalfW: 0.7,
     pillar: 0.075,
+    floorY: 0.47,
   });
   part(group, 0.08, 0.28, 0.1, dark, -0.55, 1.14, -2.0);
   part(group, 0.08, 0.28, 0.1, dark, 0.55, 1.14, -2.0);
@@ -717,6 +932,12 @@ function buildVan(group, color) {
     exhaust: false,
     deckRearZ: null,
   });
+  addCabShell(group, {
+    halfW: 0.9, floorY: 0.48, roofY: 1.8,
+    frontZ: 2.32, backZ: 0.6,
+    windowBottomY: 1.25, windowTopY: 1.75,
+    glassHalfW: 0.78, glassBottomY: 1.18, glassTopY: 1.73,
+  });
   // Rear cargo doors: the centre split and the two handles are what tell you
   // the back of the van opens.
   part(group, 0.04, 0.76, 0.03, dark, 0, 0.81, -2.36, GROOVE_COLOR);
@@ -770,6 +991,12 @@ function buildBus(group, color) {
     exhaust: false,
     deckRearZ: null,
   });
+  addCabShell(group, {
+    halfW: 1.19, floorY: 0.55, roofY: 2.9,
+    frontZ: 5.16, backZ: 3.4,
+    windowBottomY: 1.93, windowTopY: 2.77,
+    glassHalfW: 1.05, glassBottomY: 1.85, glassTopY: 2.75,
+  });
   const wheels = [
     addWheel(group, -1.06, wheelY(1.25), 3.55, true, 1.25),
     addWheel(group, 1.06, wheelY(1.25), 3.55, true, 1.25),
@@ -812,6 +1039,12 @@ function buildTruck(group, color) {
     exhaust: false,
     deckRearZ: null,
     trimW: 1.1,
+  });
+  addCabShell(group, {
+    halfW: 1.06, floorY: 0.62, roofY: 2.15,
+    frontZ: 3.15, backZ: 1.3,
+    windowBottomY: 1.42, windowTopY: 2.02,
+    glassHalfW: 1.0, glassBottomY: 1.38, glassTopY: 2.12,
   });
   const wheels = [
     addWheel(group, -0.95, wheelY(1.28), 2.6, true, 1.28),
@@ -910,6 +1143,12 @@ function buildAmbulance(group, color) {
     doors: 1,
     deckRearZ: null,
   });
+  addCabShell(group, {
+    halfW: 0.96, floorY: 0.5, roofY: 2.28,
+    frontZ: 2.1, backZ: 0.9,
+    windowBottomY: 1.38, windowTopY: 1.92,
+    glassHalfW: 0.86, glassBottomY: 1.32, glassTopY: 1.98,
+  });
   const wheels = [
     addWheel(group, -0.9, wheelY(), 1.75, true),
     addWheel(group, 0.9, wheelY(), 1.75, true),
@@ -959,6 +1198,12 @@ function buildFireTruck(group, color) {
     doors: 1,
     exhaust: false,
     deckRearZ: null,
+  });
+  addCabShell(group, {
+    halfW: 1.11, floorY: 0.66, roofY: 2.32,
+    frontZ: 4.06, backZ: 2.0,
+    windowBottomY: 1.45, windowTopY: 2.05,
+    glassHalfW: 1.0, glassBottomY: 1.38, glassTopY: 2.12,
   });
   const wheels = [
     addWheel(group, -1.0, wheelY(1.28), 3.1, true, 1.28),
@@ -1034,6 +1279,12 @@ function buildMixer(group, color) {
     cabinFrontZ: 3.6, cabinRearZ: 2.05,
     doors: 1,
     exhaust: false,
+  });
+  addCabShell(group, {
+    halfW: 1.06, floorY: 0.68, roofY: 2.2,
+    frontZ: 3.76, backZ: 1.7,
+    windowBottomY: 1.43, windowTopY: 1.98,
+    glassHalfW: 1.0, glassBottomY: 1.36, glassTopY: 2.04,
   });
   const wheels = [
     addWheel(group, -0.98, wheelY(1.25), 2.7, true, 1.25),
@@ -1132,7 +1383,7 @@ export function createVehicle(cfg) {
   let steering = null;
   const trimMat = group.userData.trimMat;
   if (trimMat && windshield) {
-    steering = addCabinInterior(group, trimMat, built, seat, windshield);
+    steering = addCabinInterior(group, trimMat, built, seat);
   }
 
   // Both brake lights share one material so a single glow drives them.

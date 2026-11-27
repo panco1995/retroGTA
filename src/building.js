@@ -50,6 +50,7 @@ function signColor(css) {
 }
 
 export function buildingHeight({ floors, style }) {
+  if (style === 'store') return 4.8;
   return style === 'industrial' ? 8.4 : floors * FLOOR_H;
 }
 
@@ -70,7 +71,11 @@ export function createBuilding(opts) {
   house.rotation.y = yaw;
 
   const tint = color ?? BRICKS[Math.floor(hash(seed, 2) * BRICKS.length)];
-  const wall = brickMaterial(tint, Math.max(w, d), height);
+  // Corner shops are rendered panels rather than brick, so the storefront
+  // reads differently from the row houses next to it.
+  const wall = style === 'store'
+    ? solid(tint, 0.88)
+    : brickMaterial(tint, Math.max(w, d), height);
   const body = new THREE.Mesh(new THREE.BoxGeometry(w, height, d), wall);
   body.position.y = height / 2;
   body.castShadow = true;
@@ -78,7 +83,7 @@ export function createBuilding(opts) {
   house.add(body);
 
   const trim = solid(shade(tint, isSafe ? 1.12 : 0.72), 0.85);
-  const bands = style === 'industrial' ? 1 : floors;
+  const bands = style === 'industrial' ? 1 : style === 'store' ? 0 : floors;
   for (let f = 1; f <= bands; f++) {
     const band = new THREE.Mesh(bandGeo, trim);
     const y = style === 'industrial' ? height - 0.3 : f * FLOOR_H;
@@ -100,7 +105,60 @@ export function createBuilding(opts) {
   }
 
   const zf = d / 2 + 0.06;
-  if (style === 'industrial') {
+  if (style === 'store') {
+    const board = sign ?? ['MART', '#2f6b4f'];
+    // A glazed shop window with mullions and a glass door to the right.
+    const glassW = Math.min(w * 0.72, 9);
+    const glassH = 2.35;
+    const glassX = -w * 0.08;
+    const glazing = new THREE.Mesh(new THREE.PlaneGeometry(glassW, glassH), windowLitMat);
+    glazing.position.set(glassX, 1.42, zf);
+    house.add(glazing);
+    for (let i = 0; i <= 4; i++) {
+      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.07, glassH + 0.1, 0.08), metal);
+      mull.position.set(glassX - glassW / 2 + (glassW / 4) * i, 1.42, zf + 0.02);
+      house.add(mull);
+    }
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.15, 2.35, 0.1), solid(0x233029, 0.6));
+    door.position.set(w * 0.36, 1.175, zf);
+    house.add(door);
+    const doorPane = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.15), windowLitMat);
+    doorPane.position.set(w * 0.36, 1.45, zf + 0.06);
+    house.add(doorPane);
+
+    // Flat canopy with a lit strip, and the sign band above it.
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(w * 0.94, 0.14, 1.5), solid(0xd8d0be, 0.8));
+    canopy.position.set(0, 2.95, d / 2 + 0.72);
+    canopy.castShadow = true;
+    house.add(canopy);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 0.06, 0.5), glow(0xffe6b0, 0.5));
+    strip.position.set(0, 2.87, d / 2 + 0.7);
+    house.add(strip);
+    const fascia = new THREE.Mesh(new THREE.BoxGeometry(w * 0.94, 0.95, 0.12), solid(signColor(board[1]), 0.7));
+    fascia.position.set(0, 3.75, zf - 0.09);
+    house.add(fascia);
+    const signBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(Math.min(w * 0.62, 6.8), 0.85),
+      signMaterial(board[0], board[1]),
+    );
+    signBoard.position.set(0, 3.75, zf + 0.01);
+    house.add(signBoard);
+
+    // A window on each side and the usual roof clutter.
+    for (const side of [-1, 1]) {
+      const win = new THREE.Mesh(winGeo, windowMat);
+      win.position.set(side * (w / 2 + 0.05), 2.0, d * 0.12);
+      win.rotation.y = Math.PI / 2;
+      win.scale.set(0.8, 0.85, 1);
+      house.add(win);
+    }
+    for (const [ax, az] of [[-w * 0.2, -d * 0.14], [w * 0.18, -d * 0.02]]) {
+      const unit = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.7, 0.95), solid(0x9a9a92, 0.8));
+      unit.position.set(ax, height + 0.35, az);
+      unit.castShadow = true;
+      house.add(unit);
+    }
+  } else if (style === 'industrial') {
     const doorW = Math.min(w * 0.42, 5.5);
     const garage = new THREE.Mesh(new THREE.BoxGeometry(doorW, 3.4, 0.08), trimDark);
     garage.position.set(0, 1.8, zf);
@@ -148,7 +206,7 @@ export function createBuilding(opts) {
     }
   }
 
-  if (style !== 'industrial') {
+  if (style !== 'industrial' && style !== 'store') {
     const cols = w > 9.4 ? 3 : 2;
     for (let f = 1; f < floors; f++) {
       const y = (f + 0.55) * FLOOR_H;
@@ -168,7 +226,9 @@ export function createBuilding(opts) {
     }
   }
 
-  if (fireEscape && style !== 'industrial') addFireEscape(house, w, d, floors);
+  if (fireEscape && style !== 'industrial' && style !== 'store') {
+    addFireEscape(house, w, d, floors);
+  }
 
   const pipe = new THREE.Mesh(new THREE.BoxGeometry(0.1, height, 0.1), solid(shade(tint, 0.55)));
   pipe.position.set(-w / 2 + 0.28, height / 2, zf);

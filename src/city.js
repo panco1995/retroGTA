@@ -205,6 +205,36 @@ export function buildCity() {
     });
   }
 
+  // Hand-placed convenience stores, like the safehouse: the map data gives a
+  // spot on a street frontage and the same building builder does the rest.
+  function addStore(spec) {
+    const { x, z, w, d, face, color } = spec;
+    const baseY = groundHeight(x, z);
+    const house = createBuilding({
+      ...spec,
+      style: 'store',
+      color: color == null ? undefined : colorOf(color),
+      baseY,
+    });
+    group.add(house);
+
+    const swap = face === 'east' || face === 'west';
+    const hw = (swap ? d : w) / 2;
+    const hd = (swap ? w : d) / 2;
+    const bounds = { minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd };
+    if (face === 'south') bounds.maxZ += 0.25;
+    if (face === 'north') bounds.minZ -= 0.25;
+    colliders.push(bounds);
+    buildings.push({
+      x,
+      z,
+      w: hw * 2,
+      d: hd * 2,
+      kind: 'store',
+      top: baseY + buildingHeight({ style: 'store' }),
+    });
+  }
+
   function fillBlocks() {
     for (const block of MAP.blocks) {
       const x0 = ROADS_X[block.col] + SETBACK + (block.insetWest ?? 0);
@@ -813,6 +843,7 @@ export function buildCity() {
   if (MAP.bridge) deck.push(...addBridge());
   commitStripes();
   fillBlocks();
+  for (const store of MAP.stores ?? []) addStore(store);
   addShape(MAP.island, 0, 0x3e3a34);
   if (MAP.beach) addShape(MAP.beach, 0.03, 0xc6b48a);
   if (MAP.landing) addShape(MAP.landing, 0.02, 0x4a463c);

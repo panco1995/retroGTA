@@ -98,6 +98,18 @@
     { "type": "hydrant", "dx": -2.1, "dz": 2.1 },
     { "type": "trash", "dx": 3.6, "dz": 0.8 }
   ],
+  "stores": [
+    {
+      "x": -90,
+      "z": 14.2,
+      "w": 12,
+      "d": 8,
+      "face": "north",
+      "color": "#e6dfd0",
+      "sign": ["MART", "#2f6b4f"],
+      "seed": 401
+    }
+  ],
   "trees": [
     { "x": -7.6, "lane": "sidewalkNorth", "scale": 1 },
     { "x": 1.5, "lane": "sidewalkNorth", "scale": 0.9 },

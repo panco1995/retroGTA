@@ -156,6 +156,16 @@ const BUILDINGS = [
     }),
   },
   {
+    id: 'store',
+    nameKey: 'building_store',
+    cache: true,
+    build: () => createBuilding({
+      x: 0, z: 0, w: 12, d: 8, floors: 1, face: 'south',
+      color: 0xe6dfd0, style: 'store', seed: 401,
+      sign: ['MART', '#2f6b4f'],
+    }),
+  },
+  {
     id: 'watertower',
     nameKey: 'building_watertower',
     cache: true,

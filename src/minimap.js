@@ -86,7 +86,13 @@ function buildBase(world) {
   }
 
   for (const b of world.buildings) {
-    g.fillStyle = b.safehouse ? '#d2c2a4' : b.kind === 'industrial' ? '#6d7270' : '#7a463c';
+    g.fillStyle = b.safehouse
+      ? '#d2c2a4'
+      : b.kind === 'industrial'
+        ? '#6d7270'
+        : b.kind === 'store'
+          ? '#4f8a63'
+          : '#7a463c';
     const x = px(b.x - b.w / 2);
     const y = py(b.z - b.d / 2);
     g.fillRect(x, y, Math.max(1, b.w * scale), Math.max(1, b.d * scale));

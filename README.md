@@ -25,7 +25,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
 - Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
-- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, five street props, and five building types on a 3D turntable, with an interior view from the driver's seat
+- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, five street props, and six building types on a 3D turntable, with an interior view from the driver's seat
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -74,7 +74,7 @@ The main menu and the pause menu both have a Collection page. It is a full-scree
 - **Vehicles** — all 15 vehicle types, in the same paint as the cheat menu
 - **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
 - **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster
-- **Buildings** — a row house, a shopfront, a water-tower house, an industrial warehouse, and the safehouse, all from the city's shared building builder
+- **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, and the safehouse, all from the city's shared building builder
 
 Pick from the list, or use the left and right arrow keys, to step through the items in the current tab. The model sits on a turntable: drag to rotate it and scroll to zoom.
 
@@ -97,6 +97,7 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `blocks` | `residential` places row houses on the north and south edges. `industrial` places two south-facing warehouses. `alley` adds two dumpsters in the gap |
 | `rows` | A named house row: width, floors, wall color, shop, awning, fire escape, roof tank |
 | `safehouse` | One safehouse; the file includes it |
+| `stores` | Hand-placed convenience stores: position, front face, wall color and sign. The city builds them with the same house builder as the row houses |
 | `hill` | The slope and the raised intersection outside the safehouse |
 | `island`, `beach`, `landing` | Coast, sand, and the far side of the bridge |
 | `diagonals` | Diagonal roads |
@@ -172,7 +173,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/collection.js` | Collection gallery: asset catalog, turntable camera, and the vehicle interior view |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Builds roads, the elevated track, colliders, and the lane/sidewalk networks, and places the buildings from `building.js` |
-| `src/building.js` | One shared building builder: brick row houses, shopfronts, water towers, warehouses and the safehouse, also used by the collection gallery |
+| `src/building.js` | One shared building builder: brick row houses, shopfronts, convenience stores, water towers, warehouses and the safehouse, also used by the collection gallery |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |

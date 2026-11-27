@@ -20,6 +20,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield
 - Building and vehicle-body collision. A stopped car is solid. A slow shove knocks someone down and they bleed; road speed runs them over and leaves more blood. People and cars follow the ground height and stay on walkable ground
+- Momentum in car crashes: the hit car is shoved by the closing speed and mass ratio, parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
 - GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser

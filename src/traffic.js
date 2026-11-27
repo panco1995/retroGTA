@@ -266,6 +266,12 @@ export function createTraffic({
     vehicle.speed = Math.max(0, vehicle.speed + clamp(diff, -rate * dt, rate * dt));
     vehicle.braking = target === 0 && vehicle.speed > 0.15;
 
+    // Impacts push the car off its lane for a moment; the offset settles back.
+    const shoveDecay = Math.exp(-2.6 * dt);
+    vehicle.shoveX *= shoveDecay;
+    vehicle.shoveZ *= shoveDecay;
+    vehicle.shoveYaw *= shoveDecay;
+
     const nextS = (slot.s + vehicle.speed * dt) % loop.total;
     const point = samplePoint(loop, nextS);
     const heading = headingAt(loop, nextS);
@@ -277,18 +283,22 @@ export function createTraffic({
       vehicle.speed = Math.max(0, vehicle.speed - 14 * dt);
       vehicle.braking = vehicle.speed > 0.15;
       vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);
+      const base = samplePoint(loop, slot.s);
+      vehicle.x = base.x + vehicle.shoveX;
+      vehicle.z = base.z + vehicle.shoveZ;
+      vehicle.heading = headingAt(loop, slot.s) + vehicle.shoveYaw;
       vehicle.collider();
       return;
     }
     slot.s = nextS;
-    vehicle.x = point.x;
-    vehicle.z = point.z;
-    vehicle.heading = heading;
+    vehicle.x = point.x + vehicle.shoveX;
+    vehicle.z = point.z + vehicle.shoveZ;
+    vehicle.heading = heading + vehicle.shoveYaw;
     vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);
     vehicle.y = world.ground(vehicle.x, vehicle.z);
     const nose = world.ground(
-      vehicle.x + Math.sin(heading) * 3,
-      vehicle.z + Math.cos(heading) * 3,
+      vehicle.x + Math.sin(vehicle.heading) * 3,
+      vehicle.z + Math.cos(vehicle.heading) * 3,
     );
     vehicle.pitch = -Math.atan2(nose - vehicle.y, 3);
     vehicle.collider();

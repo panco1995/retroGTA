@@ -2,7 +2,14 @@ import * as THREE from 'three';
 import { WALK_TOP } from './config.js';
 import { brickTexture } from './materials.js';
 import { createInput } from './input.js';
-import { blocked, circleExitsFromObb, moveCircle, obbHitsCircle, vehicleBlocked } from './collision.js';
+import {
+  blocked,
+  circleExitsFromObb,
+  moveCircle,
+  obbHitsCircle,
+  obbHitsObb,
+  vehicleBlocked,
+} from './collision.js';
 import { ATTACK_TIME, animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
@@ -303,6 +310,16 @@ export function createGame(canvas) {
     if (index >= 0) world.colliders.splice(index, 1);
   }
 
+  function clearKnock(vehicle) {
+    if (!vehicle) return;
+    vehicle.knockVX = 0;
+    vehicle.knockVZ = 0;
+    vehicle.knockSpin = 0;
+    vehicle.shoveX = 0;
+    vehicle.shoveZ = 0;
+    vehicle.shoveYaw = 0;
+  }
+
   function activateHero(next) {
     if (!next) return;
     const previous = hero;
@@ -310,9 +327,11 @@ export function createGame(canvas) {
       previous.inUse = false;
       previous.speed = 0;
       previous.braking = false;
+      clearKnock(previous);
       addVehicleCollider(previous);
     }
     removeVehicleCollider(next);
+    clearKnock(next);
     next.inUse = true;
     hero = next;
   }
@@ -428,6 +447,7 @@ export function createGame(canvas) {
       hero.inUse = false;
       hero.speed = 0;
       hero.braking = false;
+      clearKnock(hero);
       addVehicleCollider(hero);
     }
     for (const home of vehicleHome) {
@@ -447,6 +467,7 @@ export function createGame(canvas) {
       home.vehicle.speed = 0;
       home.vehicle.steer = 0;
       home.vehicle.braking = false;
+      clearKnock(home.vehicle);
       home.vehicle.sync();
       home.vehicle.collider();
     }
@@ -519,6 +540,113 @@ export function createGame(canvas) {
       world.colliders,
       null,
     );
+  }
+
+  function hitVehicleAt(vehicle, x, z) {
+    const halfL = vehicle.length / 2;
+    const halfW = vehicle.width / 2;
+    for (const other of world.vehicles) {
+      if (other === vehicle || other.group.visible === false) continue;
+      if (obbHitsObb(
+        x, z, vehicle.heading, halfL, halfW,
+        other.x, other.z, other.heading, other.length / 2, other.width / 2,
+      )) return other;
+    }
+    return null;
+  }
+
+  // Momentum transfer when the player's car runs into another car: the hit car
+  // is shoved by the closing speed and mass ratio, and the player's car loses
+  // speed in proportion to how heavy the other car is.
+  function impactVehicle(other) {
+    const dx = other.x - hero.x;
+    const dz = other.z - hero.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const nx = dx / dist;
+    const nz = dz / dist;
+    const hvx = Math.sin(hero.heading) * hero.speed;
+    const hvz = Math.cos(hero.heading) * hero.speed;
+    const ovx = Math.sin(other.heading) * (other.speed || 0);
+    const ovz = Math.cos(other.heading) * (other.speed || 0);
+    const closing = (hvx - ovx) * nx + (hvz - ovz) * nz;
+    if (closing <= 0.3) return;
+    const mA = hero.mass;
+    const mB = other.mass;
+    const impulse = (closing * mA * mB) / (mA + mB);
+    const forward = Math.sin(hero.heading) * nx + Math.cos(hero.heading) * nz;
+    hero.speed -= (impulse / mA) * forward;
+    const push = Math.min(10, impulse / mB);
+    const otherForward = Math.sin(other.heading) * nx + Math.cos(other.heading) * nz;
+    const side = (hero.x - other.x) * Math.cos(other.heading)
+      - (hero.z - other.z) * Math.sin(other.heading);
+    if (other.traffic) {
+      other.speed = THREE.MathUtils.clamp(
+        other.speed + push * Math.max(0, otherForward), 0, 14,
+      );
+      other.shoveX = THREE.MathUtils.clamp(other.shoveX + nx * push * 0.16, -1.2, 1.2);
+      other.shoveZ = THREE.MathUtils.clamp(other.shoveZ + nz * push * 0.16, -1.2, 1.2);
+      other.shoveYaw = THREE.MathUtils.clamp(
+        other.shoveYaw - side * push * 0.012, -0.28, 0.28,
+      );
+    } else if (!other.inUse) {
+      other.knockVX += nx * push;
+      other.knockVZ += nz * push;
+      other.knockSpin = THREE.MathUtils.clamp(
+        other.knockSpin - side * push * 0.18, -3, 3,
+      );
+    }
+  }
+
+  // Parked and free cars slide from an impact, slowing on friction and
+  // stopping against walls or other cars.
+  const knockCols = [];
+  function knockCars(dt) {
+    for (const vehicle of world.vehicles) {
+      if (vehicle === hero || vehicle.traffic) continue;
+      const vx = vehicle.knockVX;
+      const vz = vehicle.knockVZ;
+      const spin = vehicle.knockSpin;
+      if (Math.abs(vx) < 0.01 && Math.abs(vz) < 0.01 && Math.abs(spin) < 0.01) {
+        if (vehicle.speed !== 0) vehicle.speed = 0;
+        continue;
+      }
+      knockCols.length = 0;
+      for (const c of world.colliders) {
+        if (c !== vehicle._aabb) knockCols.push(c);
+      }
+      const nx = vehicle.x + vx * dt;
+      if (!vehicleBlocked(nx, vehicle.z, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
+        vehicle.x = nx;
+      } else {
+        vehicle.knockVX = -vx * 0.25;
+      }
+      const nz = vehicle.z + vz * dt;
+      if (!vehicleBlocked(vehicle.x, nz, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
+        vehicle.z = nz;
+      } else {
+        vehicle.knockVZ = -vz * 0.25;
+      }
+      vehicle.heading += spin * dt;
+      const damp = Math.exp(-2.4 * dt);
+      vehicle.knockVX *= damp;
+      vehicle.knockVZ *= damp;
+      vehicle.knockSpin *= Math.exp(-3.2 * dt);
+      if (Math.hypot(vehicle.knockVX, vehicle.knockVZ) < 0.05) {
+        vehicle.knockVX = 0;
+        vehicle.knockVZ = 0;
+      }
+      if (Math.abs(vehicle.knockSpin) < 0.03) vehicle.knockSpin = 0;
+      const along = Math.sin(vehicle.heading) * vehicle.knockVX
+        + Math.cos(vehicle.heading) * vehicle.knockVZ;
+      vehicle.speed = Math.abs(along) > 0.15 ? along : 0;
+      vehicle.y = world.ground(vehicle.x, vehicle.z);
+      const nose = world.ground(
+        vehicle.x + Math.sin(vehicle.heading) * 3,
+        vehicle.z + Math.cos(vehicle.heading) * 3,
+      );
+      vehicle.pitch = -Math.atan2(nose - vehicle.y, 3);
+      vehicle.collider();
+    }
   }
 
   // A car that has already overlapped someone keeps them inside, because
@@ -1048,11 +1176,20 @@ export function createGame(canvas) {
     const vx = Math.sin(hero.heading) * hero.speed;
     const vz = Math.cos(hero.heading) * hero.speed;
     const nx = hero.x + vx * dt;
-    if (!carHits(hero, nx, hero.z)) hero.x = nx;
-    else hero.speed *= -0.22;
     const nz = hero.z + vz * dt;
+    let hitCar = null;
+    if (!carHits(hero, nx, hero.z)) hero.x = nx;
+    else {
+      hitCar = hitVehicleAt(hero, nx, hero.z);
+      if (!hitCar) hero.speed *= -0.22;
+    }
     if (!carHits(hero, hero.x, nz)) hero.z = nz;
-    else hero.speed *= -0.22;
+    else {
+      const car = hitVehicleAt(hero, hero.x, nz);
+      if (car) hitCar = car;
+      else if (!hitCar) hero.speed *= -0.22;
+    }
+    if (hitCar) impactVehicle(hitCar);
     hero.collider();
 
     const ahead = 3;
@@ -1530,6 +1667,7 @@ export function createGame(canvas) {
     world.update(dt, elapsed);
     updateCamera(dt, false);
     traffic.update(dt);
+    knockCars(dt);
     for (const vehicle of world.vehicles) vehicle.updateVisual(dt);
     crowd.update(dt, elapsed);
     crushPeople(dt);

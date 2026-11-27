@@ -16,7 +16,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 ## Features
 
 - Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake
-- Three cameras: follow, top-down, and 2.5D
+- Four cameras: follow, first-person, top-down, and 2.5D
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield
 - Building and vehicle-body collision. A stopped car is solid. A slow shove knocks someone down and they bleed; road speed runs them over and leaves more blood. People and cars follow the ground height and stay on walkable ground
@@ -47,7 +47,7 @@ make single      # one file, dist/retrogta.html
 
 ## Controls
 
-Choose Start on the main menu. In the follow camera, move the mouse to look around. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
+Choose Start on the main menu. In the follow and first-person cameras, move the mouse to look around. First person applies on foot; while driving the camera stays behind the car. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
 
 Rebind keys in Settings → Controls → Keyboard, in either menu: click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses. The camera can also be picked directly in Settings → View; it stays in sync with the V key.
 
@@ -56,7 +56,7 @@ Rebind keys in Settings → Controls → Keyboard, in either menu: click a bindi
 | W A S D | Move relative to the camera | Throttle, brake / reverse, steer |
 | Shift | Run | — |
 | Mouse | Turn the follow camera | Turn the follow camera |
-| V | Cycle follow, top-down, and 2.5D | Cycle follow, top-down, and 2.5D |
+| V | Cycle follow, first-person, top-down, and 2.5D | Cycle follow, first-person, top-down, and 2.5D |
 | M | Toggle the full-island map | Toggle the full-island map |
 | E | Walk to the nearer side and get in | Exit when moving slowly |
 | Space | Jump | Brake |

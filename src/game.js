@@ -14,8 +14,15 @@ import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseH
 import { VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
 
-const VIEW_ORDER = ['follow', 'top', 'iso'];
-const VIEW_LABELS = { follow: 'viewFollow', top: 'viewTop', iso: 'viewIso' };
+const VIEW_ORDER = ['follow', 'first', 'top', 'iso'];
+const VIEW_LABELS = {
+  follow: 'viewFollow',
+  first: 'viewFirst',
+  top: 'viewTop',
+  iso: 'viewIso',
+};
+// Views that use the mouse and pointer lock.
+const LOOK_VIEWS = new Set(['follow', 'first']);
 
 const ENTER_RANGE = 20;
 // The prompt only appears when the player is close, even though pressing the
@@ -198,6 +205,7 @@ export function createGame(canvas) {
 
   function setView(next) {
     view = next;
+    if (next !== 'first') pitch = THREE.MathUtils.clamp(pitch, -0.15, 1.05);
     syncViewOptions();
   }
 
@@ -209,7 +217,7 @@ export function createGame(canvas) {
       button.dataset.view = name;
       button.addEventListener('click', () => {
         setView(name);
-        if (name !== 'follow') document.exitPointerLock();
+        if (!LOOK_VIEWS.has(name)) document.exitPointerLock();
       });
       viewOptionsEl.append(button);
     }
@@ -475,7 +483,7 @@ export function createGame(canvas) {
     mapFromGame = false;
     pauseEl.classList.add('hidden');
     input.release();
-    if (view === 'follow') input.lock();
+    if (LOOK_VIEWS.has(view)) input.lock();
   }
 
   function closeMap() {
@@ -1144,6 +1152,7 @@ export function createGame(canvas) {
   }
 
   function viewLabel() {
+    if (view === 'first' && mode === 'foot') return t('viewFirst');
     if (view === 'top') return t('viewTop');
     if (view === 'iso') return t('viewIso');
     return t('viewFollow');
@@ -1158,8 +1167,27 @@ export function createGame(canvas) {
     let camPitch = pitch;
     let dist = driving ? 10.5 : started ? 6.4 : 12.5;
     let lookY = (driving ? 1.15 : started ? 1.35 : 4.2) + gy;
+    // The character would fill the first-person view.
+    player.group.visible = !(started && mode === 'foot' && view === 'first');
     if (!started) {
       camera.up.set(0, 1, 0);
+    } else if (view === 'first' && mode === 'foot') {
+      // Eyes in the character's head: the camera looks where the mouse points.
+      camera.up.set(0, 1, 0);
+      const eyeY = WALK_TOP + gy + player.jumpY + 1.62;
+      camera.position.set(player.x, eyeY, player.z);
+      camReady = true;
+      const cp = Math.cos(pitch);
+      look.set(
+        player.x + Math.sin(yaw) * cp * 4,
+        eyeY - Math.sin(pitch) * 4,
+        player.z + Math.cos(yaw) * cp * 4,
+      );
+      camera.lookAt(look);
+      sun.position.set(player.x + 36, 64, player.z + 22);
+      sun.target.position.set(player.x, 0, player.z);
+      sun.target.updateMatrixWorld();
+      return;
     } else if (view === 'top') {
       camera.up.set(0, 0, -1);
       desired.set(targetX, gy + (driving ? 52 : 38), targetZ);
@@ -1255,7 +1283,7 @@ export function createGame(canvas) {
     setText(speedEl, t('onFoot'));
     setText(
       hintEl,
-      view === 'follow'
+      LOOK_VIEWS.has(view)
         ? t('hintFollow', keys)
         : t('hintFixed', { ...keys, view: viewLabel() }),
     );
@@ -1305,14 +1333,14 @@ export function createGame(canvas) {
   });
 
   document.addEventListener('mousemove', (e) => {
-    if (!started || view !== 'follow' || document.pointerLockElement !== canvas) return;
+    if (!started || !LOOK_VIEWS.has(view) || document.pointerLockElement !== canvas) return;
     yaw -= e.movementX * 0.003;
     pitch += e.movementY * 0.0022;
-    pitch = THREE.MathUtils.clamp(pitch, -0.15, 1.05);
+    pitch = THREE.MathUtils.clamp(pitch, view === 'first' ? -1.2 : -0.15, 1.05);
   });
 
   canvas.addEventListener('click', () => {
-    if (started && !paused && view === 'follow') input.lock();
+    if (started && !paused && LOOK_VIEWS.has(view)) input.lock();
   });
 
   document.getElementById('menu-start').addEventListener('click', () => {
@@ -1324,7 +1352,7 @@ export function createGame(canvas) {
     yaw = player.heading;
     pitch = 0.3;
     input.release();
-    if (view === 'follow') input.lock();
+    if (LOOK_VIEWS.has(view)) input.lock();
   });
 
   document.getElementById('pause-resume').addEventListener('click', () => closePause());
@@ -1357,7 +1385,7 @@ export function createGame(canvas) {
 
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === canvas) return;
-    if (!started || paused || view !== 'follow') return;
+    if (!started || paused || !LOOK_VIEWS.has(view)) return;
     openPause();
   });
 
@@ -1389,10 +1417,11 @@ export function createGame(canvas) {
     if (hintTime > 0) hintTime = Math.max(0, hintTime - dt);
 
     if (started && input.consume('camera')) {
-      setView(view === 'follow' ? 'top' : view === 'top' ? 'iso' : 'follow');
-      if (view !== 'follow') document.exitPointerLock();
+      const index = VIEW_ORDER.indexOf(view);
+      setView(VIEW_ORDER[(index + 1) % VIEW_ORDER.length]);
+      if (!LOOK_VIEWS.has(view)) document.exitPointerLock();
     }
-    if (started) input.setAim(view === 'follow');
+    if (started) input.setAim(LOOK_VIEWS.has(view));
 
     if (flash) {
       flash.timer -= dt;

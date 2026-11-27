@@ -23,8 +23,9 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Momentum in car crashes: any two cars that touch exchange momentum by closing speed and mass ratio. Parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
 - GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
-- Main menu (Start, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
-- Pause menu (Esc): resume, restart, settings, map, cheats, and exit
+- Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
+- Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
+- Collection gallery: all 15 vehicles, the 12 pedestrian kinds, and five street props on a 3D turntable, with an interior view from the driver's seat
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -65,6 +66,18 @@ Rebind keys in Settings → Controls → Keyboard, in either menu: click a bindi
 | Esc | Pause: resume, restart, settings, map, cheats, or exit | Pause: resume, restart, settings, map, cheats, or exit |
 
 The round radar at the bottom left shows the area around the player and rotates so the player faces up; driving fast widens the view. The arrow is the player, the cyan dot is the safehouse, and white dots are parked vehicles. Moving traffic and pedestrians are not shown. The pause map shows the whole island with north up. While driving, the top-right readout shows speed in km/h; reverse speed is negative.
+
+## Collection
+
+The main menu and the pause menu both have a Collection page. It is a full-screen gallery with three tabs:
+
+- **Vehicles** — all 15 vehicle types, in the same paint as the cheat menu
+- **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
+- **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster
+
+Pick from the list, or use the left and right arrow keys, to step through the items in the current tab. The model sits on a turntable: drag to rotate it and scroll to zoom.
+
+Vehicles with a modelled cabin also show an **Interior view** button beside the item controls. It puts the camera in the same driver's seat the first-person driving view uses, hides the windshield, and turns dragging into a free look around the cabin. The E key, or whichever key is bound to entering and exiting a car, toggles it as well. Switching between vehicles keeps the interior view; switching to people or props returns to the exterior.
 
 ## Interface language
 
@@ -154,7 +167,8 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | File | Role |
 | --- | --- |
 | `src/main.js` | Entry point |
-| `src/menu.js` | Menu navigation for the main and pause menus, including the shared settings page |
+| `src/menu.js` | Menu navigation for the main and pause menus, including the shared settings page and the collection overlay |
+| `src/collection.js` | Collection gallery: asset catalog, turntable camera, and the vehicle interior view |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
 | `src/city.js` | Builds roads, buildings, the elevated track, colliders, and the lane/sidewalk networks |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |

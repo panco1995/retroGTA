@@ -161,7 +161,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders |
+| `src/vehicle.js` | Vehicle meshes, driving state, and the 15 builders: the body is merged per material, the tyre and hub share one wheel mesh, and every car gets mirrors, panel gaps and a first person cabin |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
 | `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |

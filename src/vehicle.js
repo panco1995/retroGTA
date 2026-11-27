@@ -1,9 +1,32 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glow, solid } from './materials.js';
 import { ROAD_TOP } from './config.js';
 
-const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12);
-const hubGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.26, 8);
+// One material for every wheel in the game: the tyre and the hub bake into a
+// single mesh with their colours in vertex attributes.
+const WHEEL_MAT = new THREE.MeshStandardMaterial({
+  vertexColors: true,
+  roughness: 0.58,
+  metalness: 0.18,
+});
+
+const TYRE_COLOR = 0x1a1a1a;
+const HUB_COLOR = 0x8d9094;
+const SLOT_COLOR = 0x24262a;
+
+function paintGeo(geo, color) {
+  const c = new THREE.Color(color);
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i += 1) {
+    arr[i * 3] = c.r;
+    arr[i * 3 + 1] = c.g;
+    arr[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
 
 function part(parent, w, h, d, mat, x, y, z) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -19,12 +42,25 @@ function addWheel(parent, x, y, z, front, scale = 1) {
   steer.position.set(x, y, z);
   steer.scale.setScalar(scale);
   const roller = new THREE.Group();
-  const tire = new THREE.Mesh(wheelGeo, solid(0x1a1a1a, 0.7));
-  tire.rotation.z = Math.PI / 2;
-  tire.castShadow = true;
-  const hub = new THREE.Mesh(hubGeo, solid(0x8d9094, 0.35, 0.6));
-  hub.rotation.z = Math.PI / 2;
-  roller.add(tire, hub);
+  const geos = [];
+  const tyre = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 12);
+  tyre.rotateZ(Math.PI / 2);
+  geos.push(paintGeo(tyre, TYRE_COLOR));
+  const hub = new THREE.CylinderGeometry(0.2, 0.2, 0.27, 8);
+  hub.rotateZ(Math.PI / 2);
+  geos.push(paintGeo(hub, HUB_COLOR));
+  // Spoke slots on the outboard face of the rim.
+  const face = Math.sign(x) || 1;
+  for (let i = 0; i < 4; i += 1) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const slot = new THREE.BoxGeometry(0.03, 0.06, 0.17);
+    slot.rotateX(-a);
+    slot.translate(face * 0.138, Math.sin(a) * 0.09, Math.cos(a) * 0.09);
+    geos.push(paintGeo(slot, SLOT_COLOR));
+  }
+  const mesh = new THREE.Mesh(mergeGeometries(geos, false), WHEEL_MAT);
+  mesh.castShadow = true;
+  roller.add(mesh);
   steer.add(roller);
   parent.add(steer);
   return { steer, roller, front, radius: 0.34 * scale };
@@ -47,6 +83,133 @@ function beam(parent, a, b, thickness, mat) {
   return mesh;
 }
 
+// Bakes the static body of a vehicle down to one mesh per material. Wheels
+// stay separate because they steer and roll, and the windshield stays
+// separate because the first person camera hides it.
+function mergeVehicleBody(group, keep) {
+  const buckets = new Map();
+  for (const child of [...group.children]) {
+    if (!child.isMesh || keep.has(child)) continue;
+    child.updateMatrix();
+    const geo = child.geometry.clone();
+    geo.applyMatrix4(child.matrix);
+    let bucket = buckets.get(child.material);
+    if (!bucket) {
+      bucket = { material: child.material, geos: [] };
+      buckets.set(child.material, bucket);
+    }
+    bucket.geos.push(geo);
+    group.remove(child);
+  }
+  const byMaterial = new Map();
+  for (const bucket of buckets.values()) {
+    const merged = bucket.geos.length === 1 ? bucket.geos[0] : mergeGeometries(bucket.geos, false);
+    if (!merged) {
+      // mergeGeometries only gives up on mismatched attributes, which cannot
+      // happen here; keep the body visible if it ever does.
+      for (const geo of bucket.geos) {
+        const mesh = new THREE.Mesh(geo, bucket.material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
+      continue;
+    }
+    const mesh = new THREE.Mesh(merged, bucket.material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    byMaterial.set(bucket.material, mesh);
+  }
+  return byMaterial;
+}
+
+function cylinderPart(parent, r, h, mat, x, y, z, rx = 0) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), mat);
+  mesh.position.set(x, y, z);
+  mesh.rotation.x = rx;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+// Trim every car shares: side mirrors, panel gaps, door handles, a grille and
+// exhaust tips. It reuses the body materials, so once the body is merged the
+// whole car still costs one mesh per material.
+function addCarTrim(group, spec) {
+  const {
+    paint, dark,
+    halfW, frontZ, rearZ, beltY,
+    cabinFrontZ, cabinRearZ,
+    doors = 2,
+    mirror = true,
+    exhaust = true,
+    grille = true,
+  } = spec;
+  // The cabin trim reuses this material, so it costs no extra draw call.
+  group.userData.trimMat = dark;
+  const skin = halfW + 0.02;
+
+  // Panel gaps and handles down both flanks.
+  const gaps = doors === 0
+    ? []
+    : doors === 1
+      ? [cabinFrontZ - 0.25]
+      : [cabinFrontZ - 0.25, cabinRearZ + 0.55];
+  for (const side of [-1, 1]) {
+    for (const z of gaps) {
+      part(group, 0.04, 0.44, 0.05, dark, side * skin, beltY - 0.2, z);
+      part(group, 0.06, 0.05, 0.18, dark, side * (skin + 0.03), beltY - 0.03, z - 0.36);
+    }
+  }
+
+  if (mirror) {
+    for (const side of [-1, 1]) {
+      part(group, 0.05, 0.04, 0.05, dark, side * (halfW + 0.04), beltY + 0.1, cabinFrontZ - 0.16);
+      part(group, 0.15, 0.11, 0.2, dark, side * (halfW + 0.1), beltY + 0.14, cabinFrontZ - 0.24);
+    }
+  }
+
+  if (grille) {
+    part(group, halfW * 1.15, 0.17, 0.06, dark, 0, beltY - 0.3, frontZ - 0.02);
+    part(group, halfW * 0.8, 0.04, 0.04, paint, 0, beltY - 0.24, frontZ - 0.04);
+    part(group, halfW * 0.8, 0.04, 0.04, paint, 0, beltY - 0.36, frontZ - 0.04);
+  }
+
+  if (exhaust) {
+    for (const side of [-1, 1]) {
+      cylinderPart(group, 0.05, 0.16, dark, side * 0.34, 0.3, rearZ - 0.06, Math.PI / 2);
+    }
+  }
+}
+
+// A dashboard and a steering wheel, so the first person camera has something
+// to sit behind. The body shell is invisible from the inside, so without these
+// the driver view is nothing but the road.
+function addCabinInterior(group, mat, built, seat, windshield) {
+  const eyeY = seat.y;
+  const frontZ = windshield.position.z;
+  part(group, built.width * 0.8, 0.18, 0.42, mat, 0, eyeY - 0.31, frontZ - 0.28);
+
+  const hub = new THREE.Group();
+  hub.position.set(seat.x, eyeY - 0.28, frontZ - 0.56);
+  hub.rotation.x = 0.35;
+  const spin = new THREE.Group();
+  const rim = new THREE.TorusGeometry(0.17, 0.028, 6, 14);
+  rim.rotateX(0);
+  const boss = new THREE.BoxGeometry(0.08, 0.07, 0.07);
+  const spoke = new THREE.BoxGeometry(0.06, 0.16, 0.05);
+  spoke.translate(0, -0.1, 0);
+  const wheel = mergeGeometries([rim, boss, spoke], false);
+  const mesh = new THREE.Mesh(wheel, mat);
+  mesh.castShadow = true;
+  spin.add(mesh);
+  hub.add(spin);
+  group.add(hub);
+  return spin;
+}
+
 function buildSedan(group, color, taxi) {
   const paint = solid(color, 0.55, 0.08);
   const dark = solid(0x141618, 0.6, 0.2);
@@ -65,6 +228,12 @@ function buildSedan(group, color, taxi) {
   const tailL = part(group, 0.28, 0.12, 0.06, glow(0xff2a2a, 0.35).clone(), -0.62, 0.66, -2.22);
   const tailR = part(group, 0.28, 0.12, 0.06, glow(0xff2a2a, 0.35).clone(), 0.62, 0.66, -2.22);
   part(group, 0.42, 0.12, 0.04, solid(0xd9d3c4, 0.5), 0, 0.5, -2.24);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.89, frontZ: 2.2, rearZ: -2.2, beltY: 1.04,
+    cabinFrontZ: 0.72, cabinRearZ: -1.05,
+    doors: 2,
+  });
   if (taxi) {
     part(group, 0.46, 0.12, 0.28, glow(0xfff6d8, 0.5), 0, 1.78, -0.15);
   }
@@ -95,6 +264,12 @@ function buildHatchback(group, color) {
   part(group, 0.2, 0.13, 0.06, glow(0xfff1cc, 0.7), 0.56, 0.6, 1.92);
   const tailL = part(group, 0.24, 0.16, 0.06, glow(0xff2a2a, 0.35).clone(), -0.62, 0.68, -1.9);
   const tailR = part(group, 0.24, 0.16, 0.06, glow(0xff2a2a, 0.35).clone(), 0.62, 0.68, -1.9);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.85, frontZ: 1.9, rearZ: -1.9, beltY: 1.02,
+    cabinFrontZ: 0.82, cabinRearZ: -0.83,
+    doors: 2,
+  });
   const wheels = [
     addWheel(group, -0.78, wheelY(), 1.2, true),
     addWheel(group, 0.78, wheelY(), 1.2, true),
@@ -122,6 +297,12 @@ function buildSuv(group, color) {
   part(group, 0.3, 0.18, 0.06, glow(0xfff1cc, 0.7), 0.64, 0.78, 2.32);
   const tailL = part(group, 0.28, 0.18, 0.06, glow(0xff2a2a, 0.35).clone(), -0.68, 0.82, -2.32);
   const tailR = part(group, 0.28, 0.18, 0.06, glow(0xff2a2a, 0.35).clone(), 0.68, 0.82, -2.32);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.96, frontZ: 2.3, rearZ: -2.3, beltY: 1.3,
+    cabinFrontZ: 1.0, cabinRearZ: -1.3,
+    doors: 2,
+  });
   const wheels = [
     addWheel(group, -0.86, wheelY(1.08), 1.45, true, 1.08),
     addWheel(group, 0.86, wheelY(1.08), 1.45, true, 1.08),
@@ -153,6 +334,12 @@ function buildPickup(group, color) {
   part(group, 0.32, 0.18, 0.06, glow(0xfff1cc, 0.7), 0.62, 0.8, 2.58);
   const tailL = part(group, 0.28, 0.18, 0.06, glow(0xff2a2a, 0.35).clone(), -0.68, 0.78, -2.65);
   const tailR = part(group, 0.28, 0.18, 0.06, glow(0xff2a2a, 0.35).clone(), 0.68, 0.78, -2.65);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.94, frontZ: 2.56, rearZ: -2.64, beltY: 1.5,
+    cabinFrontZ: 1.05, cabinRearZ: -0.05,
+    doors: 1,
+  });
   const wheels = [
     addWheel(group, -0.88, wheelY(1.12), 1.65, true, 1.12),
     addWheel(group, 0.88, wheelY(1.12), 1.65, true, 1.12),
@@ -184,6 +371,12 @@ function buildSports(group, color) {
   part(group, 0.26, 0.12, 0.06, glow(0xfff1cc, 0.8), 0.62, 0.52, 2.22);
   const tailL = part(group, 0.3, 0.1, 0.06, glow(0xff2a2a, 0.35).clone(), -0.64, 0.55, -2.22);
   const tailR = part(group, 0.3, 0.1, 0.06, glow(0xff2a2a, 0.35).clone(), 0.64, 0.55, -2.22);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.95, frontZ: 2.2, rearZ: -2.2, beltY: 0.84,
+    cabinFrontZ: 0.5, cabinRearZ: -0.78,
+    doors: 1,
+  });
   const wheels = [
     addWheel(group, -0.86, wheelY(), 1.45, true),
     addWheel(group, 0.86, wheelY(), 1.45, true),
@@ -207,6 +400,13 @@ function buildVan(group, color) {
   part(group, 0.24, 0.16, 0.06, glow(0xfff1cc, 0.6), 0.62, 0.72, 2.4);
   const tailL = part(group, 0.26, 0.16, 0.06, glow(0xff2a2a, 0.35).clone(), -0.7, 0.78, -2.4);
   const tailR = part(group, 0.26, 0.16, 0.06, glow(0xff2a2a, 0.35).clone(), 0.7, 0.78, -2.4);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 0.95, frontZ: 2.4, rearZ: -2.4, beltY: 1.25,
+    cabinFrontZ: 2.0, cabinRearZ: 1.35,
+    doors: 1,
+    exhaust: false,
+  });
   const wheels = [
     addWheel(group, -0.9, wheelY(), 1.5, true),
     addWheel(group, 0.9, wheelY(), 1.5, true),
@@ -234,6 +434,13 @@ function buildBus(group, color) {
   part(group, 0.32, 0.2, 0.06, glow(0xfff1cc, 0.7), 0.85, 0.82, 5.3);
   const tailL = part(group, 0.3, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), -0.85, 0.88, -5.3);
   const tailR = part(group, 0.3, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), 0.85, 0.88, -5.3);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 1.225, frontZ: 5.28, rearZ: -5.28, beltY: 1.93,
+    cabinFrontZ: 4.9, cabinRearZ: -4.6,
+    doors: 0,
+    exhaust: false,
+  });
   const wheels = [
     addWheel(group, -1.06, wheelY(1.25), 3.55, true, 1.25),
     addWheel(group, 1.06, wheelY(1.25), 3.55, true, 1.25),
@@ -260,6 +467,13 @@ function buildTruck(group, color) {
   part(group, 0.3, 0.2, 0.06, glow(0xfff1cc, 0.7), 0.8, 0.78, 3.28);
   const tailL = part(group, 0.28, 0.24, 0.06, glow(0xff2a2a, 0.35).clone(), -0.9, 0.8, -3.38);
   const tailR = part(group, 0.28, 0.24, 0.06, glow(0xff2a2a, 0.35).clone(), 0.9, 0.8, -3.38);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 1.15, frontZ: 3.26, rearZ: -3.36, beltY: 1.42,
+    cabinFrontZ: 2.9, cabinRearZ: 1.6,
+    doors: 0,
+    exhaust: false,
+  });
   const wheels = [
     addWheel(group, -0.95, wheelY(1.28), 2.6, true, 1.28),
     addWheel(group, 0.95, wheelY(1.28), 2.6, true, 1.28),
@@ -348,6 +562,12 @@ function buildAmbulance(group, color) {
   part(group, 0.28, 0.18, 0.06, glow(0xfff1cc, 0.7), 0.64, 0.85, 2.98);
   const tailL = part(group, 0.26, 0.2, 0.06, glow(0xff2a2a, 0.35).clone(), -0.7, 0.85, -2.7);
   const tailR = part(group, 0.26, 0.2, 0.06, glow(0xff2a2a, 0.35).clone(), 0.7, 0.85, -2.7);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 1.0, frontZ: 2.96, rearZ: -2.68, beltY: 1.38,
+    cabinFrontZ: 2.3, cabinRearZ: 1.4,
+    doors: 0,
+  });
   const wheels = [
     addWheel(group, -0.9, wheelY(), 1.75, true),
     addWheel(group, 0.9, wheelY(), 1.75, true),
@@ -388,6 +608,13 @@ function buildFireTruck(group, color) {
   part(group, 0.3, 0.2, 0.06, glow(0xfff1cc, 0.7), 0.82, 0.82, 4.18);
   const tailL = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), -0.85, 0.85, -3.52);
   const tailR = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), 0.85, 0.85, -3.52);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 1.15, frontZ: 4.16, rearZ: -3.5, beltY: 1.45,
+    cabinFrontZ: 3.95, cabinRearZ: 2.35,
+    doors: 0,
+    exhaust: false,
+  });
   const wheels = [
     addWheel(group, -1.0, wheelY(1.28), 3.1, true, 1.28),
     addWheel(group, 1.0, wheelY(1.28), 3.1, true, 1.28),
@@ -452,6 +679,13 @@ function buildMixer(group, color) {
   part(group, 0.3, 0.2, 0.06, glow(0xfff1cc, 0.7), 0.8, 0.8, 3.86);
   const tailL = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), -0.85, 0.82, -3.92);
   const tailR = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), 0.85, 0.82, -3.92);
+  addCarTrim(group, {
+    paint, dark,
+    halfW: 1.1, frontZ: 3.84, rearZ: -3.9, beltY: 1.43,
+    cabinFrontZ: 3.6, cabinRearZ: 2.05,
+    doors: 0,
+    exhaust: false,
+  });
   const wheels = [
     addWheel(group, -0.98, wheelY(1.25), 2.7, true, 1.25),
     addWheel(group, 0.98, wheelY(1.25), 2.7, true, 1.25),
@@ -511,6 +745,7 @@ export function createVehicle(cfg) {
   });
   glassParts.sort((a, b) => b.position.z - a.position.z);
   const windshield = glassParts[0] ?? null;
+
   let seat;
   if (windshield) {
     seat = {
@@ -522,6 +757,29 @@ export function createVehicle(cfg) {
     const box = new THREE.Box3().setFromObject(group);
     seat = { x: -0.36, y: Math.min(2.6, box.max.y - 0.4), z: Math.min(0.1, built.length / 2 - 1.2) };
   }
+
+  // A cabin for the first person camera to sit behind.
+  let steering = null;
+  const trimMat = group.userData.trimMat;
+  if (trimMat && windshield) {
+    steering = addCabinInterior(group, trimMat, built, seat, windshield);
+  }
+
+  // Both brake lights share one material so a single glow drives them.
+  if (built.tails.length > 1) {
+    const mat = built.tails[0].material;
+    for (const tail of built.tails) tail.material = mat;
+  }
+
+  // Bake the body down to one mesh per material.
+  const keep = new Set();
+  if (windshield) keep.add(windshield);
+  const byMaterial = mergeVehicleBody(group, keep);
+  if (built.tails.length) {
+    const mergedTail = byMaterial.get(built.tails[0].material);
+    built.tails = mergedTail ? [mergedTail] : [];
+  }
+
   const state = {
     group,
     type,
@@ -548,6 +806,7 @@ export function createVehicle(cfg) {
     wheels: built.wheels,
     tails: built.tails,
     windshield,
+    steering,
     seat,
     inUse: false,
     _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
@@ -600,6 +859,7 @@ export function createVehicle(cfg) {
         wheel.roller.rotation.x += (this.speed / wheel.radius) * dt;
         if (wheel.front) wheel.steer.rotation.y = this.steer;
       }
+      if (this.steering) this.steering.rotation.z = -this.steer * 1.7;
       const glowAmount = this.braking ? 1.6 : 0.28;
       for (const tail of this.tails) tail.material.emissiveIntensity = glowAmount;
     },

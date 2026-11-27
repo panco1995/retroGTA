@@ -1174,6 +1174,53 @@ export function createGame(canvas) {
     return t('viewFollow');
   }
 
+  // Pulls the chase camera in front of buildings instead of letting it end up
+  // inside a house. The segment is tested in 2D against building footprints,
+  // with the height at the hit point so low roof lines still count.
+  function avoidWalls(ox, oy, oz, point) {
+    const dx = point.x - ox;
+    const dz = point.z - oz;
+    const dy = point.y - oy;
+    if (dx * dx + dz * dz < 0.0001) return;
+    const pad = 0.3;
+    let nearest = 1;
+    for (const b of world.buildings) {
+      const minX = b.x - b.w / 2 - pad;
+      const maxX = b.x + b.w / 2 + pad;
+      const minZ = b.z - b.d / 2 - pad;
+      const maxZ = b.z + b.d / 2 + pad;
+      let t0 = 0;
+      let t1 = 1;
+      if (Math.abs(dx) < 1e-6) {
+        if (ox < minX || ox > maxX) continue;
+      } else {
+        let a = (minX - ox) / dx;
+        let c = (maxX - ox) / dx;
+        if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a);
+        t1 = Math.min(t1, c);
+        if (t0 > t1) continue;
+      }
+      if (Math.abs(dz) < 1e-6) {
+        if (oz < minZ || oz > maxZ) continue;
+      } else {
+        let a = (minZ - oz) / dz;
+        let c = (maxZ - oz) / dz;
+        if (a > c) [a, c] = [c, a];
+        t0 = Math.max(t0, a);
+        t1 = Math.min(t1, c);
+        if (t0 > t1) continue;
+      }
+      if (t0 <= 0 || t0 >= nearest) continue;
+      if (oy + dy * t0 > b.top) continue;
+      nearest = t0;
+    }
+    if (nearest < 1) {
+      const t = Math.max(0.08, nearest - 0.04);
+      point.set(ox + dx * t, oy + dy * t, oz + dz * t);
+    }
+  }
+
   function updateCamera(dt, snap) {
     const driving = started && mode === 'drive';
     const targetX = driving ? hero.x : player.x;
@@ -1258,6 +1305,7 @@ export function createGame(canvas) {
       Math.max(gy + 0.45, lookY + Math.sin(camPitch) * dist),
       targetZ - Math.cos(camYaw) * horiz,
     );
+    if (started) avoidWalls(targetX, lookY, targetZ, desired);
     if (snap || !camReady) {
       camera.position.copy(desired);
       camReady = true;

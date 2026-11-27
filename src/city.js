@@ -295,7 +295,15 @@ const platW = Math.min(w * 0.34, 2.4);
     if (face === 'south') bounds.maxZ += 0.25;
     if (face === 'north') bounds.minZ -= 0.25;
     colliders.push(bounds);
-    buildings.push({ x, z, w: hw * 2, d: hd * 2, safehouse: !!isSafe, kind: style ?? 'house' });
+    buildings.push({
+      x,
+      z,
+      w: hw * 2,
+      d: hd * 2,
+      safehouse: !!isSafe,
+      kind: style ?? 'house',
+      top: (opts.baseY ?? 0) + height,
+    });
 
     if (isSafe) {
       safehouse = {

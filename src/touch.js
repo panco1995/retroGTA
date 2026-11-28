@@ -44,10 +44,6 @@ function saveVisible(next) {
   }
 }
 
-export function touchPadVisible() {
-  return padVisible;
-}
-
 // The pad lives in the game (it needs the input object), but the setting that
 // shows it belongs to the menus, so it is reachable from both sides. Both
 // write the same body class, so the setting holds whether or not the pad is

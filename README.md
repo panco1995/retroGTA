@@ -37,7 +37,7 @@ Every push to `main` publishes. The workflow installs, runs `npm run check`, bui
 
 **Street furniture that reacts.** A car throws the rubbish bags and the hydrant, shoves the skip, and knocks the lamp post over — it falls about its foot, lands across the road and sparks from its live cable. A tree is taller than a car and does not come down.
 
-**Also.** Momentum in car crashes. Radar minimap and a full-island map (M). Contextual key prompts. Main and pause menus with shared settings: language, camera, rebindable keys. Collection gallery of every vehicle, pedestrian, street prop and building. Cheats. English and Chinese.
+**Also.** Momentum in car crashes. Radar minimap and a full-island map (M). A HUD that stays out of the way: a speed reading, a toast for what just happened, and nothing that names a key. Main and pause menus with shared settings: language, camera, rebindable keys. Collection gallery of every vehicle, pedestrian, street prop and building. Cheats. English and Chinese.
 
 ## Run
 

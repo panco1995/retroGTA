@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { WALK_TOP } from './config.js';
 import { brickTexture } from './materials.js';
 import { createInput } from './input.js';
-import { createTouchPad, isTouch, onTouchPadChange, requestLandscape, touchPadVisible } from './touch.js';
+import { createTouchPad, isTouch, onTouchPadChange, requestLandscape } from './touch.js';
 import {
   blocked,
   circleExitsFromObb,
@@ -21,7 +21,7 @@ import { settleOnGround } from './terrain.js';
 import { releaseRagdoll, startRagdoll, stepPhysics, stepRagdolls } from './ragdoll.js';
 import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
-import { keyVars, onBindingsChange } from './bindings.js';
+import { onBindingsChange } from './bindings.js';
 import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseHome } from './menu.js';
 import { VEHICLE_COLORS, VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
@@ -39,9 +39,6 @@ const VIEW_LABELS = {
 const LOOK_VIEWS = new Set(['follow', 'first']);
 
 const ENTER_RANGE = 20;
-// The prompt only appears when the player is close, even though pressing the
-// interact key can still walk to a car from further away.
-const PROMPT_RANGE = 5.5;
 const JUMP_SPEED = 7.4;
 // A moving car is much heavier than a person: touches below BUMP_SPEED just
 // nudge them aside, faster hits go through the momentum model and scale the
@@ -186,7 +183,6 @@ export function createGame(canvas) {
   let view = 'follow';
   let approach = null;
   let flash = null;
-  let hintTime = 0;
   let yaw = Math.PI;
   let pitch = 0.32;
 
@@ -288,10 +284,6 @@ export function createGame(canvas) {
   });
 
   const speedEl = document.getElementById('speed');
-  const hintEl = document.getElementById('hint');
-  const promptEl = document.getElementById('prompt');
-  const promptKeyEl = document.getElementById('prompt-key');
-  const promptLabelEl = document.getElementById('prompt-label');
   const toastEl = document.getElementById('toast');
   const menuEl = document.getElementById('menu');
   const hudEl = document.getElementById('hud');
@@ -602,7 +594,6 @@ export function createGame(canvas) {
     traffic.reset();
     props.reset();
     shocks.reset();
-    hintTime = 12;
     input.release();
   }
 
@@ -1695,13 +1686,6 @@ export function createGame(canvas) {
     }
   }
 
-  function viewLabel() {
-    if (view === 'first') return t('viewFirst');
-    if (view === 'top') return t('viewTop');
-    if (view === 'iso') return t('viewIso');
-    return t('viewFollow');
-  }
-
   // Pulls the chase camera in front of buildings instead of letting it end up
   // inside a house. The segment is tested in 2D against building footprints,
   // with the height at the hit point so low roof lines still count.
@@ -1861,21 +1845,6 @@ export function createGame(canvas) {
     if (el.textContent !== text) el.textContent = text;
   }
 
-  // A small keycap plus a verb: the way most modern games show a contextual
-  // action. status hides the keycap for messages such as "heading to car".
-  function setPrompt(show, key = '', label = '', status = false) {
-    if (!show) {
-      promptEl.classList.remove('show');
-      return;
-    }
-    setText(promptKeyEl, key);
-    setText(promptLabelEl, label);
-    promptEl.classList.toggle('status', status);
-    // Touch has no key to show, so the cap is dropped instead of left empty.
-    promptEl.classList.toggle('nokey', key === '');
-    promptEl.classList.add('show');
-  }
-
   function setToast(text) {
     if (text) {
       setText(toastEl, text);
@@ -1885,61 +1854,20 @@ export function createGame(canvas) {
     }
   }
 
+  // The speed reading and the toast are the whole of the HUD: the world itself
+  // says what can be done, so nothing on screen names a key.
   function updateHud() {
     if (!started) {
       setText(speedEl, '');
-      setText(hintEl, '');
-      setPrompt(false);
       setToast('');
       return;
     }
 
-    const keys = keyVars();
-    hintEl.classList.toggle('fade', hintTime <= 0);
     setToast(flash ? flash.text : '');
     touchPad?.setMode(mode);
-
-    // With the pad hidden the player is on a phone with no keys to name, so
-    // the hint stays out of the way instead of describing buttons that are not
-    // on the screen.
-    const pad = touchPad && touchPadVisible();
-
-    if (mode === 'drive') {
-      setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
-      if (touchPad) setText(hintEl, pad ? t('hintTouchDrive') : '');
-      else setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
-      const canExit = Math.abs(hero.speed) < 2.5;
-      setPrompt(canExit, touchPad ? '' : keys.interact, t('exitCar'));
-      return;
-    }
-
-    setText(speedEl, t('onFoot'));
-    if (touchPad) setText(hintEl, pad ? t('hintTouch') : '');
-    else {
-      setText(
-        hintEl,
-        LOOK_VIEWS.has(view)
-          ? t('hintFollow', keys)
-          : t('hintFixed', { ...keys, view: viewLabel() }),
-      );
-    }
-
-    if (player.airborne) {
-      setPrompt(false);
-      return;
-    }
-
-    if (approach) {
-      setPrompt(true, '', t('approachCar'), true);
-      return;
-    }
-
-    const near = findEnterableVehicle(player.x, player.z, PROMPT_RANGE);
-    if (near) {
-      setPrompt(true, touchPad ? '' : keys.interact, near.traffic ? t('stealCar') : t('enterCar'));
-    } else {
-      setPrompt(false);
-    }
+    setText(speedEl, mode === 'drive'
+      ? `${Math.round(hero.speed * 3.6)} km/h`
+      : t('onFoot'));
   }
 
   onLangChange(updateHud);
@@ -1984,7 +1912,6 @@ export function createGame(canvas) {
   document.getElementById('menu-start').addEventListener('click', () => {
     if (started) return;
     started = true;
-    hintTime = 12;
     menuEl.classList.add('hidden');
     hudEl.classList.remove('hidden');
     yaw = player.heading;
@@ -2072,8 +1999,6 @@ export function createGame(canvas) {
       requestAnimationFrame(frame);
       return;
     }
-
-    if (hintTime > 0) hintTime = Math.max(0, hintTime - dt);
 
     if (started && input.consume('camera')) {
       const index = VIEW_ORDER.indexOf(view);

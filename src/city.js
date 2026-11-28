@@ -13,7 +13,7 @@ import {
   deg,
   hash,
 } from './config.js';
-import { solid, windowMat } from './materials.js';
+import { solid } from './materials.js';
 import { buildingHeight, createBuilding } from './building.js';
 import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
@@ -970,61 +970,6 @@ export function buildCity() {
     if (body) knockables.push({ group: trash, collider, spec: body });
   }
 
-  // Whether a spot sits in a road, given how the street grid is laid out: roads
-  // run along the x lines and the z lines, each ROAD_W wide, with pavements
-  // either side.
-  function crossesARoad(x, z, margin = 0.8) {
-    const reach = ROAD_W / 2 + margin;
-    for (const rx of ROADS_X) {
-      if (Math.abs(x - rx) < reach) {
-        // On this road's own width in x; it is in the road only if it is also
-        // within the street's length, which is everywhere here.
-        return true;
-      }
-    }
-    for (const rz of ROADS_Z) {
-      if (Math.abs(z - rz) < reach) return true;
-    }
-    return false;
-  }
-
-  function addEl() {
-    const { x, z0, z1, deckY, pillarSpacing } = MAP.elevated;
-    const deck = box(4.6, 0.48, z1 - z0, concrete, x, deckY, (z0 + z1) / 2, { cast: true });
-    deck.receiveShadow = true;
-    box(4.8, 0.7, z1 - z0, solid(0x6a675f, 0.9), x, deckY - 0.45, (z0 + z1) / 2, { cast: true });
-    box(0.18, 0.55, z1 - z0, metal, x - 1.7, deckY + 0.45, (z0 + z1) / 2);
-    box(0.18, 0.55, z1 - z0, metal, x + 1.7, deckY + 0.45, (z0 + z1) / 2);
-    for (let z = z0; z <= z1; z += pillarSpacing) {
-      // A pillar standing in a road is a pillar a car drives into. The line
-      // crosses the cross streets, and the deck can be carried over those on
-      // its own; a missing pillar is not seen, and a pillar in the lane is.
-      if (crossesARoad(x, z)) continue;
-      box(1.15, deckY - 0.2, 1.15, concrete, x, (deckY - 0.2) / 2, z, { cast: true });
-      colliders.push({ minX: x - 0.7, maxX: x + 0.7, minZ: z - 0.7, maxZ: z + 0.7 });
-    }
-    const train = new THREE.Group();
-    train.position.set(x, deckY + 0.24 + 1.05, -10);
-    const carMat = solid(0x5c656c, 0.55, 0.2);
-    const stripe = solid(0xb4532a, 0.6);
-    for (const oz of [-4.2, 4.2]) {
-      const car = new THREE.Mesh(new THREE.BoxGeometry(3.15, 2.05, 7.4), carMat);
-      car.position.z = oz;
-      car.castShadow = true;
-      train.add(car);
-      const band = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.28, 7.4), stripe);
-      band.position.set(0, -0.15, oz);
-      train.add(band);
-      for (let k = -2; k <= 2; k++) {
-        const win = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 0.9), windowMat);
-        win.position.set(1.6, 0.35, oz + k * 1.2);
-        train.add(win);
-      }
-    }
-    group.add(train);
-    return { x, z0, z1, train, deckTop: deckY + 0.24 };
-  }
-
   function addWaterfront() {
     const spec = MAP.water;
     const water = new THREE.Mesh(
@@ -1111,7 +1056,6 @@ export function buildCity() {
   // the map says what is underfoot, not the rectangle a road happens to be.
   if (MAP.beach) surfaces.unshift({ kind: 'sand', ring: MAP.beach });
   addWaterfront();
-  const el = addEl();
   addGate();
   addBounds();
   const walkable = [MAP.island, ...deck];
@@ -1213,9 +1157,6 @@ export function buildCity() {
     heading: Math.PI / 2,
   };
 
-  let trainZ = MAP.train.startZ;
-  let trainDir = 1;
-
   // The ground as one object. It answers with the height, which is what the
   // rest of the game asked for before, and with the lean and the material,
   // which is what a vehicle on a slope needs.
@@ -1252,7 +1193,6 @@ export function buildCity() {
     // The old name, kept because most of the game only ever wanted a height.
     ground: terrain.heightAt,
     terrain,
-    el: { x: el.x, z0: el.z0, z1: el.z1 },
     shore: MAP.island,
     beach: MAP.beach,
     landing: MAP.landing,
@@ -1260,17 +1200,6 @@ export function buildCity() {
     water: { x: MAP.water.x, z: MAP.water.z, w: MAP.water.w, d: MAP.water.d },
     spawnVehicle(cfg) {
       return addVehicle(cfg);
-    },
-    update(dt) {
-      trainZ += trainDir * MAP.train.speed * dt;
-      if (trainZ > MAP.train.maxZ) trainDir = -1;
-      if (trainZ < MAP.train.minZ) trainDir = 1;
-      el.train.position.z = trainZ;
-    },
-    reset() {
-      trainZ = MAP.train.startZ;
-      trainDir = 1;
-      el.train.position.z = trainZ;
     },
   };
 }

@@ -559,7 +559,6 @@ export function createGame(canvas) {
     });
     crowd.reset();
     traffic.reset();
-    world.reset();
     props.reset();
     shocks.reset();
     hintTime = 12;
@@ -2001,7 +2000,6 @@ export function createGame(canvas) {
     }
 
     updatePeds(dt, elapsed);
-    world.update(dt, elapsed);
     updateCamera(dt, false);
     traffic.update(dt);
     knockCars(dt);

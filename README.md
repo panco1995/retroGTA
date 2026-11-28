@@ -110,7 +110,6 @@ Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.jso
 | `diagonals` | Diagonal roads |
 | `bridge` | One bridge, deck at road height, with side towers |
 | `water` | One water plane |
-| `elevated`, `train` | An elevated track and a train that shuttles along it |
 | `gate` | One gate and a short approach road |
 | `trees` | Placed trees |
 | `safehouseProps` | `hydrant` and `trash` |
@@ -180,7 +179,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/menu.js` | Menu navigation for the main and pause menus, including the shared settings page and the collection overlay |
 | `src/collection.js` | Collection gallery: asset catalog, turntable camera, and the vehicle interior view |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
-| `src/city.js` | Builds roads, the elevated track, colliders, and the lane/sidewalk networks, and places the buildings from `building.js` |
+| `src/city.js` | Builds roads, colliders, and the lane/sidewalk networks, and places the buildings from `building.js` |
 | `src/building.js` | One shared building builder: brick row houses, shopfronts, convenience stores, water towers, warehouses, hospitals, police stations and the safehouse, also used by the collection gallery |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |

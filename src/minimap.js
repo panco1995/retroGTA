@@ -102,15 +102,6 @@ function buildBase(world) {
     g.fillRect(x, y, Math.max(1, b.w * scale), Math.max(1, b.d * scale));
   }
 
-  if (world.el) {
-    g.strokeStyle = '#b7b2a6';
-    g.lineWidth = Math.max(2, scale * 1.1);
-    g.beginPath();
-    g.moveTo(px(world.el.x), py(world.el.z0));
-    g.lineTo(px(world.el.x), py(world.el.z1));
-    g.stroke();
-  }
-
   if (world.safehouse) {
     const sx = px(world.safehouse.doorX);
     const sy = py(world.safehouse.doorZ);

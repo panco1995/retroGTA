@@ -193,59 +193,5 @@ const ramp = createTerrain({ height: (x, z) => z * RISE });
     crossing.length === 0, `${crossing.length} roads cross it`);
 }
 
-// Whatever the map puts in the world has to be somewhere the player can get to,
-// and the elevated line was not: it ran at x = -140 from z = -40 to 90, while
-// the island's west coast is at x = -130 or so, so the whole railway was out
-// over the sea. It was built, it ran, and nobody ever saw it.
-//
-// This holds the map to its own shape.
-{
-  const { MAP, ROAD_W } = await import('../src/config.js');
-  const island = MAP.island;
-  const inside = (x, z) => {
-    let inPoly = false;
-    for (let i = 0, j = island.length - 1; i < island.length; j = i++) {
-      const xi = island[i][0];
-      const zi = island[i][1];
-      const xj = island[j][0];
-      const zj = island[j][1];
-      if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) {
-        inPoly = !inPoly;
-      }
-    }
-    return inPoly;
-  };
-
-  const e = MAP.elevated;
-  const offIsland = [];
-  for (let z = e.z0; z <= e.z1; z += 1) {
-    if (!inside(e.x, z)) offIsland.push(z);
-  }
-  check('the elevated line is over the island, not the sea',
-    offIsland.length === 0,
-    offIsland.length ? `${offIsland.length} m off the coast, from z ${offIsland[0]}` : '');
-
-  // The train has to fit on the deck it runs along, or it drives off the end.
-  const t = MAP.train;
-  const halfTrain = 4.2 + 7.4 / 2;
-  check('the train stays on the deck',
-    e.z0 <= t.minZ - halfTrain && e.z1 >= t.maxZ + halfTrain,
-    `train reaches ${(t.minZ - halfTrain).toFixed(1)}..${(t.maxZ + halfTrain).toFixed(1)}, deck is ${e.z0}..${e.z1}`);
-
-  // And no pillar stands in a road, where a car would drive into it.
-  const { buildCity } = await import('../src/city.js');
-  const city = buildCity();
-  const pillars = city.colliders.filter((c) => !c.keepInside && !c.obb && !c.circle
-    && Math.abs((c.minX + c.maxX) / 2 - e.x) < 0.1);
-  const inRoad = pillars.filter((c) => {
-    const z = (c.minZ + c.maxZ) / 2;
-    const x = (c.minX + c.maxX) / 2;
-    return MAP.roads.z.some((rz) => Math.abs(z - rz) < ROAD_W / 2)
-      || MAP.roads.x.some((rx) => Math.abs(x - rx) < ROAD_W / 2);
-  });
-  check('no elevated pillar stands in a road', inRoad.length === 0,
-    `${inRoad.length} of ${pillars.length} pillars`);
-}
-
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { WALK_TOP, colorOf } from './config.js';
 import { animateActor, createActor, setPose } from './actor.js';
-import { blocked, moveCircle } from './collision.js';
+import { blocked, moveCircle, nearby } from './collision.js';
 
 // The crowd streams around the player: a slot only spawns on a sidewalk that
 // is off camera, and only leaves once it is far away and out of view.
@@ -612,8 +612,6 @@ export function createPedestrianCrowd({
     return false;
   }
 
-  const solidBuf = [];
-
   // The driven car is taken out of world.colliders so it does not hit itself.
   // Pedestrians still have to walk around it.
   function stampPerson(person) {
@@ -628,24 +626,32 @@ export function createPedestrianCrowd({
     return hit;
   }
 
+  // What one walker has to avoid: the world around it, the driven car, and
+  // the people it should not walk through. The answer is per point, so a
+  // walker only ever looks at the colliders near where it stands.
   function solidColliders(self) {
-    solidBuf.length = 0;
-    for (let i = 0; i < world.colliders.length; i++) solidBuf.push(world.colliders[i]);
-    const extra = getExtraColliders ? getExtraColliders() : null;
-    if (extra) {
-      for (let i = 0; i < extra.length; i++) {
-        if (!solidBuf.includes(extra[i])) solidBuf.push(extra[i]);
-      }
-    }
-    for (let i = 0; i < active.length; i++) {
-      const other = active[i];
-      if (other !== self) solidBuf.push(stampPerson(other));
-    }
-    const neighbors = getNeighbors ? getNeighbors() : null;
-    if (neighbors) {
-      for (let i = 0; i < neighbors.length; i++) solidBuf.push(stampPerson(neighbors[i]));
-    }
-    return solidBuf;
+    return {
+      near(x, z, radius) {
+        const out = [];
+        const base = nearby(world.colliders, x, z, radius);
+        for (let i = 0; i < base.length; i += 1) out.push(base[i]);
+        const extra = getExtraColliders ? getExtraColliders() : null;
+        if (extra) {
+          for (let i = 0; i < extra.length; i += 1) {
+            if (!out.includes(extra[i])) out.push(extra[i]);
+          }
+        }
+        for (let i = 0; i < active.length; i += 1) {
+          const other = active[i];
+          if (other !== self) out.push(stampPerson(other));
+        }
+        const neighbors = getNeighbors ? getNeighbors() : null;
+        if (neighbors) {
+          for (let i = 0; i < neighbors.length; i += 1) out.push(stampPerson(neighbors[i]));
+        }
+        return out;
+      },
+    };
   }
 
   function findSpot(focus) {

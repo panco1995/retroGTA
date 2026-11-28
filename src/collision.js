@@ -1,3 +1,9 @@
+// A collider source answers "what could touch this point": the world list
+// uses its spatial index, a plain array is scanned as it is.
+export function nearby(source, x, z, radius) {
+  return source && typeof source.near === 'function' ? source.near(x, z, radius) : source;
+}
+
 export function insidePolygon(x, z, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -118,14 +124,19 @@ export function vehicleBlocked(x, z, heading, length, width, colliders, circles)
   const halfW = width / 2;
   const fx = Math.sin(heading);
   const fz = Math.cos(heading);
-  if (outOfRegion(x, z, colliders)
-    || outOfRegion(x + fx * halfL, z + fz * halfL, colliders)
-    || outOfRegion(x - fx * halfL, z - fz * halfL, colliders)) return true;
-  for (let i = 0; i < colliders.length; i++) {
-    const c = colliders[i];
+  // The car reaches halfL ahead of its centre, so that is how far the query
+  // has to look to catch anything it would drive into.
+  const list = nearby(colliders, x, z, halfL + halfW);
+  if (outOfRegion(x, z, list)
+    || outOfRegion(x + fx * halfL, z + fz * halfL, list)
+    || outOfRegion(x - fx * halfL, z - fz * halfL, list)) return true;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
     if (c.keepInside) continue;
     if (c.obb) {
       if (obbHitsObb(x, z, heading, halfL, halfW, c.x, c.z, c.heading, c.halfL, c.halfW)) return true;
+    } else if (c.circle) {
+      if (obbHitsCircle(x, z, heading, halfL, halfW, c.x, c.z, c.radius)) return true;
     } else if (obbHitsAabb(x, z, heading, halfL, halfW, c)) return true;
   }
   if (circles) {
@@ -139,10 +150,11 @@ export function vehicleBlocked(x, z, heading, length, width, colliders, circles)
 
 export function blocked(x, z, radius, colliders) {
   const r2 = radius * radius;
+  const list = nearby(colliders, x, z, radius);
   let hasRegion = false;
   let inRegion = false;
-  for (let i = 0; i < colliders.length; i++) {
-    const c = colliders[i];
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
     if (c.keepInside) {
       hasRegion = true;
       if (!inRegion && insidePolygon(x, z, c.keepInside)) inRegion = true;

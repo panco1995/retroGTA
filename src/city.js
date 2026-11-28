@@ -16,6 +16,7 @@ import {
 import { glow, solid, windowMat } from './materials.js';
 import { buildingHeight, createBuilding } from './building.js';
 import { insidePolygon } from './collision.js';
+import { ColliderList } from './spatial.js';
 import { createVehicle } from './vehicle.js';
 
 const SIGNS = MAP.signs;
@@ -65,7 +66,7 @@ function placeZ(spec, originZ = 0) {
 
 export function buildCity() {
   const group = new THREE.Group();
-  const colliders = [];
+  const colliders = new ColliderList();
   const buildings = [];
   const roads = [];
   const stripes = [];
@@ -280,7 +281,9 @@ export function buildCity() {
     lid.rotation.x = -0.15;
     dump.add(lid);
     group.add(dump);
-    colliders.push({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.6, maxZ: z + 0.6 });
+    // The body is 1.7 across and 1.05 deep, and the collider has to follow
+    // the rotation instead of pretending the box is axis aligned.
+    colliders.push({ obb: true, x, z, heading: rot, halfL: 0.53, halfW: 0.85 });
   }
 
   function addLamp(x, z, roadX, roadZ) {
@@ -299,6 +302,9 @@ export function buildCity() {
     head.position.set(x + ux * 0.72, WALK_TOP + 4.32, z + uz * 0.72);
     if (Math.abs(ux) > 0.5) head.rotation.y = Math.PI / 2;
     group.add(head);
+    // Only the pole is at body height. The arm hangs over the road well
+    // above a car, so it does not stop anything.
+    colliders.push({ circle: true, x, z, radius: 0.14 });
   }
 
   function hillSpec() {
@@ -725,6 +731,9 @@ export function buildCity() {
     crown.position.set(x, groundHeight(x, z) + WALK_TOP + 1.9 * scale, z);
     crown.castShadow = true;
     group.add(crown);
+    // The trunk stops people; the crown is a canopy that hangs over the
+    // pavement, and blocking its whole footprint would wall the sidewalk off.
+    colliders.push({ circle: true, x, z, radius: 0.16 * scale + 0.06 });
   }
 
   function addHydrant(x, z) {
@@ -734,6 +743,7 @@ export function buildCity() {
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), solid(0xb7b2a8, 0.4, 0.4));
     cap.position.set(x, groundHeight(x, z) + WALK_TOP + 0.58, z);
     group.add(cap);
+    colliders.push({ circle: true, x, z, radius: 0.17 });
   }
 
   function addTrash(x, z) {
@@ -743,6 +753,7 @@ export function buildCity() {
       bag.scale.y = 0.8;
       group.add(bag);
     }
+    colliders.push({ circle: true, x: x + 0.28, z, radius: 0.34 });
   }
 
   function addEl() {

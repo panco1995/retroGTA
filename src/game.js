@@ -6,6 +6,7 @@ import {
   blocked,
   circleExitsFromObb,
   moveCircle,
+  nearby,
   obbHitsCircle,
   obbHitsObb,
   vehicleBlocked,
@@ -160,7 +161,18 @@ export function createGame(canvas) {
   let yaw = Math.PI;
   let pitch = 0.32;
   const scratch = [];
-  const staticCols = [];
+  // The static obstacles: everything in the world that is not a vehicle. It is
+  // a view, so each body only sees the obstacles around it.
+  const staticCols = {
+    near(x, z, radius) {
+      const out = [];
+      const base = nearby(world.colliders, x, z, radius);
+      for (let i = 0; i < base.length; i += 1) {
+        if (!base[i].obb) out.push(base[i]);
+      }
+      return out;
+    },
+  };
   const blood = createBlood(scene);
   const look = new THREE.Vector3();
   const desired = new THREE.Vector3();
@@ -332,7 +344,15 @@ export function createGame(canvas) {
   }
 
   function findSpawnSpot(origin, facing, radius) {
-    const cols = [...world.colliders, hero.collider()];
+    const cols = {
+      near(x, z, r) {
+        const out = [];
+        const base = nearby(world.colliders, x, z, r);
+        for (let i = 0; i < base.length; i += 1) out.push(base[i]);
+        out.push(hero.collider());
+        return out;
+      },
+    };
     const angles = [
       0, Math.PI / 2, -Math.PI / 2, Math.PI,
       Math.PI / 4, -Math.PI / 4, Math.PI * 0.75, -Math.PI * 0.75,
@@ -652,7 +672,20 @@ export function createGame(canvas) {
 
   // Parked and free cars slide from an impact, slowing on friction and
   // stopping against walls or other cars.
-  const knockCols = [];
+  // What a knocked car slides into: the world around it, without the car
+  // itself. The driven car is not in the world list, so it is added back.
+  const knockCols = {
+    vehicle: null,
+    near(x, z, radius) {
+      const out = [];
+      const base = nearby(world.colliders, x, z, radius);
+      for (let i = 0; i < base.length; i += 1) {
+        if (base[i] !== this.vehicle) out.push(base[i]);
+      }
+      if (hero && hero !== this.vehicle) out.push(hero.collider());
+      return out;
+    },
+  };
   function knockCars(dt) {
     for (const vehicle of world.vehicles) {
       if (vehicle.traffic || (vehicle === hero && mode === 'drive')) continue;
@@ -663,14 +696,7 @@ export function createGame(canvas) {
         if (vehicle.speed !== 0) vehicle.speed = 0;
         continue;
       }
-      knockCols.length = 0;
-      for (const c of world.colliders) {
-        if (c !== vehicle._aabb) knockCols.push(c);
-      }
-      // The driven car is not a static collider, so add it back for slides.
-      if (hero && hero !== vehicle && !knockCols.includes(hero.collider())) {
-        knockCols.push(hero.collider());
-      }
+      knockCols.vehicle = vehicle;
       const nx = vehicle.x + vx * dt;
       if (!vehicleBlocked(nx, vehicle.z, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
         vehicle.x = nx;
@@ -720,11 +746,6 @@ export function createGame(canvas) {
   // moveCircle refuses every step that is still blocked. Push them out to the
   // nearest edge, unless that edge is a wall.
   function separatePeople() {
-    staticCols.length = 0;
-    for (let i = 0; i < world.colliders.length; i++) {
-      const box = world.colliders[i];
-      if (!box.obb) staticCols.push(box);
-    }
     const ignore = mode === 'foot' ? (approach?.vehicle ?? null) : null;
     if (mode === 'foot') separateBody(player, player.radius, ignore);
     for (let i = 0; i < peds.length; i++) separateBody(peds[i], peds[i].radius, null);
@@ -841,10 +862,6 @@ export function createGame(canvas) {
   // along the car's travel direction by the closing speed, and the outcome
   // (nudge, knockdown or death) scales with the impact and the car's mass.
   function crushPeople(dt) {
-    staticCols.length = 0;
-    for (let i = 0; i < world.colliders.length; i += 1) {
-      if (!world.colliders[i].obb) staticCols.push(world.colliders[i]);
-    }
     const people = eachPerson();
     for (let v = 0; v < world.vehicles.length; v += 1) {
       const vehicle = world.vehicles[v];
@@ -1043,24 +1060,32 @@ export function createGame(canvas) {
     return scratch;
   }
 
+  // The colliders one body has to avoid: the world around it, the driven car
+  // and the people it should not walk through. The answer is per point, so a
+  // body only ever looks at the colliders near where it stands.
   function collidersFor(includeHero, ignore, ignorePerson) {
-    scratch.length = 0;
-    for (const c of world.colliders) {
-      if (ignore && c === ignore._aabb) continue;
-      scratch.push(c);
-    }
-    if (includeHero && hero && hero !== ignore && !scratch.includes(hero.collider())) {
-      scratch.push(hero.collider());
-    }
-    if (mode === 'foot' && player !== ignorePerson) scratch.push(personHit(player));
-    for (let i = 0; i < peds.length; i++) {
-      if (peds[i] !== ignorePerson) scratch.push(personHit(peds[i]));
-    }
-    const slots = crowd.positions();
-    for (let i = 0; i < slots.length; i++) {
-      if (slots[i] !== ignorePerson) scratch.push(personHit(slots[i]));
-    }
-    return scratch;
+    const skip = ignore ? ignore._aabb : null;
+    return {
+      near(x, z, radius) {
+        const out = [];
+        const base = nearby(world.colliders, x, z, radius);
+        for (let i = 0; i < base.length; i += 1) {
+          if (base[i] !== skip) out.push(base[i]);
+        }
+        if (includeHero && hero && hero !== ignore && !world.colliders.includes(hero._aabb)) {
+          out.push(hero.collider());
+        }
+        if (mode === 'foot' && player !== ignorePerson) out.push(personHit(player));
+        for (let i = 0; i < peds.length; i++) {
+          if (peds[i] !== ignorePerson) out.push(personHit(peds[i]));
+        }
+        const slots = crowd.positions();
+        for (let i = 0; i < slots.length; i++) {
+          if (slots[i] !== ignorePerson) out.push(personHit(slots[i]));
+        }
+        return out;
+      },
+    };
   }
 
   function enterCar() {

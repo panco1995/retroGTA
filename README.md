@@ -185,6 +185,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
+| `src/spatial.js` | Spatial index for the colliders: the static ones are bucketed into a grid and queried by cell, the ones that move (cars) are kept on a short list that is always tested |
 | `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
 | `src/i18n.js` | English and Chinese interface strings |

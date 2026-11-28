@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:single": "SINGLE_FILE=1 vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check": "node scripts/spatial-check.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

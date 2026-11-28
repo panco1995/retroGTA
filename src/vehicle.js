@@ -1481,7 +1481,10 @@ export function createVehicle(cfg) {
     driver,
     seat,
     inUse: false,
-    _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 },
+    // A car can be driven, pushed or spun at any moment, and the collider is
+    // rewritten in place when it moves. So it is never worth indexing: the
+    // spatial grid keeps moving colliders on a short list it always checks.
+    _aabb: { minX: 0, maxX: 0, minZ: 0, maxZ: 0, moving: true },
     sync() {
       group.rotation.order = 'YXZ';
       group.position.set(this.x, (this.y || 0) + (this.bounce || 0), this.z);

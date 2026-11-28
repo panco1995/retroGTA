@@ -970,6 +970,24 @@ export function buildCity() {
     if (body) knockables.push({ group: trash, collider, spec: body });
   }
 
+  // Whether a spot sits in a road, given how the street grid is laid out: roads
+  // run along the x lines and the z lines, each ROAD_W wide, with pavements
+  // either side.
+  function crossesARoad(x, z, margin = 0.8) {
+    const reach = ROAD_W / 2 + margin;
+    for (const rx of ROADS_X) {
+      if (Math.abs(x - rx) < reach) {
+        // On this road's own width in x; it is in the road only if it is also
+        // within the street's length, which is everywhere here.
+        return true;
+      }
+    }
+    for (const rz of ROADS_Z) {
+      if (Math.abs(z - rz) < reach) return true;
+    }
+    return false;
+  }
+
   function addEl() {
     const { x, z0, z1, deckY, pillarSpacing } = MAP.elevated;
     const deck = box(4.6, 0.48, z1 - z0, concrete, x, deckY, (z0 + z1) / 2, { cast: true });
@@ -978,6 +996,10 @@ export function buildCity() {
     box(0.18, 0.55, z1 - z0, metal, x - 1.7, deckY + 0.45, (z0 + z1) / 2);
     box(0.18, 0.55, z1 - z0, metal, x + 1.7, deckY + 0.45, (z0 + z1) / 2);
     for (let z = z0; z <= z1; z += pillarSpacing) {
+      // A pillar standing in a road is a pillar a car drives into. The line
+      // crosses the cross streets, and the deck can be carried over those on
+      // its own; a missing pillar is not seen, and a pillar in the lane is.
+      if (crossesARoad(x, z)) continue;
       box(1.15, deckY - 0.2, 1.15, concrete, x, (deckY - 0.2) / 2, z, { cast: true });
       colliders.push({ minX: x - 0.7, maxX: x + 0.7, minZ: z - 0.7, maxZ: z + 0.7 });
     }

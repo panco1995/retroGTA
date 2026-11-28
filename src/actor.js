@@ -378,6 +378,8 @@ export function setPose(actor, pose) {
   }
   actor.visual.rotation.x = 0;
   actor.visual.position.y = 0;
+  // A ragdoll leaves the hips turned to however the body landed.
+  actor.hips.rotation.set(0, 0, 0);
   if (pose === 'sit') {
     actor.hips.position.y = 0.56;
     p.leftLeg.rotation.set(-1.35, 0, 0.06);
@@ -404,6 +406,9 @@ export function setPose(actor, pose) {
     p.torso.rotation.set(0, 0.25, 0.18);
   } else {
     actor.hips.position.y = 0.9;
+    actor.hips.position.x = 0;
+    actor.hips.position.z = 0;
+    actor.getupFrom = null;
     p.leftLeg.rotation.set(0, 0, 0);
     p.rightLeg.rotation.set(0, 0, 0);
     p.leftShin.rotation.set(0, 0, 0);
@@ -423,6 +428,7 @@ const GETUP_TIME = 0.55;
 const GETUP_DOWN = {
   visual: [-Math.PI / 2, 0.34],
   hipsY: 0.9,
+  hips: [0, 0, 0],
   leftLeg: [0.25, 0.08, 0.4],
   rightLeg: [-0.4, -0.06, -0.28],
   leftShin: [0.2, 0, 0],
@@ -473,7 +479,8 @@ function animateGetup(actor, dt) {
   const p = actor.parts;
   const t = actor.getup;
   const split = 0.55;
-  let from = GETUP_DOWN;
+  // A body that was knocked over gets up from where it landed.
+  let from = actor.getupFrom ?? GETUP_DOWN;
   let to = GETUP_CROUCH;
   let k = t / split;
   if (t >= split) {
@@ -484,6 +491,8 @@ function animateGetup(actor, dt) {
   actor.visual.rotation.x = from.visual[0] + (to.visual[0] - from.visual[0]) * e;
   actor.visual.position.y = from.visual[1] + (to.visual[1] - from.visual[1]) * e;
   actor.hips.position.y = from.hipsY + (to.hipsY - from.hipsY) * e;
+  // The hips may have landed on their side; right them along with the limbs.
+  mix3(actor.hips.rotation, from.hips ?? [0, 0, 0], [0, 0, 0], e);
   mix3(p.leftLeg.rotation, from.leftLeg, to.leftLeg, e);
   mix3(p.rightLeg.rotation, from.rightLeg, to.rightLeg, e);
   mix3(p.leftShin.rotation, from.leftShin, to.leftShin, e);

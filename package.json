@@ -8,9 +8,10 @@
     "build": "vite build",
     "build:single": "SINGLE_FILE=1 vite build",
     "preview": "vite preview",
-    "check": "node scripts/spatial-check.mjs"
+    "check": "node scripts/spatial-check.mjs && node scripts/ragdoll-check.mjs"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "three": "^0.170.0"
   },
   "devDependencies": {

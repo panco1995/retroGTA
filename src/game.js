@@ -15,6 +15,7 @@ import { ATTACK_TIME, animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
+import { releaseRagdoll, startRagdoll, stepRagdolls } from './ragdoll.js';
 import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
 import { keyVars, onBindingsChange } from './bindings.js';
@@ -747,11 +748,16 @@ export function createGame(canvas) {
   // nearest edge, unless that edge is a wall.
   function separatePeople() {
     const ignore = mode === 'foot' ? (approach?.vehicle ?? null) : null;
-    if (mode === 'foot') separateBody(player, player.radius, ignore);
-    for (let i = 0; i < peds.length; i++) separateBody(peds[i], peds[i].radius, null);
+    // A body the engine is holding stays where the engine put it.
+    if (mode === 'foot' && !player.ragdoll) separateBody(player, player.radius, ignore);
+    for (let i = 0; i < peds.length; i++) {
+      if (peds[i].ragdoll) continue;
+      separateBody(peds[i], peds[i].radius, null);
+    }
     const slots = crowd.positions();
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
+      if (slot.actor?.ragdoll) continue;
       if (!separateBody(slot, slot.radius || 0.36, null) || !slot.actor) continue;
       slot.actor.x = slot.x;
       slot.actor.z = slot.z;
@@ -845,6 +851,7 @@ export function createGame(canvas) {
     player.hitVZ = 0;
     player.hitCool = 0;
     approach = null;
+    releaseRagdoll(player);
     setPose(player, 'stand');
     placeOnFoot(player, spawn.x, spawn.z, spawn.heading);
     flash = { text: t('wasted'), timer: 2.4 };
@@ -937,7 +944,18 @@ export function createGame(canvas) {
             body.down = 6.5;
           }
           if (severity >= DOWN_SPEED) {
-            if (actor.pose !== 'down') setPose(actor, 'down');
+            // The body goes down for real: the engine takes it from here.
+            if (!actor.ragdoll) {
+              startRagdoll(actor, {
+                x: body.x,
+                z: body.z,
+                groundY: WALK_TOP + world.ground(body.x, body.z),
+                vx: body.hitVX,
+                vy: body.jumpV,
+                vz: body.hitVZ,
+                colliders: world.colliders,
+              });
+            }
             endChat(body);
             blood.spill(body.x, body.z, y, severity >= KILL_SPEED);
             body.bleed = severity >= KILL_SPEED ? 0.3 : 0.65;
@@ -956,6 +974,8 @@ export function createGame(canvas) {
         for (let j = i + 1; j < people.length; j += 1) {
           const a = people[i];
           const b = people[j];
+          // The engine decides where a body that is on the ground lies.
+          if (a.actor.ragdoll || b.actor.ragdoll) continue;
           let dx = b.body.x - a.body.x;
           let dz = b.body.z - a.body.z;
           const min = a.radius + b.radius;
@@ -992,6 +1012,18 @@ export function createGame(canvas) {
     for (let i = 0; i < people.length; i += 1) {
       const { body, actor } = people[i];
       if (body.hitCool > 0) body.hitCool = Math.max(0, body.hitCool - dt);
+      // While the engine has the body, it owns where the person is: the flat
+      // sliding below would fight it.
+      const ragg = actor.ragdoll;
+      if (ragg) {
+        body.x = ragg.x;
+        body.z = ragg.z;
+        body.hitVX = 0;
+        body.hitVZ = 0;
+        body.jumpY = 0;
+        body.jumpV = 0;
+        syncPerson(body, actor);
+      }
       const hvx = body.hitVX || 0;
       const hvz = body.hitVZ || 0;
       if (Math.abs(hvx) > 0.05 || Math.abs(hvz) > 0.05) {
@@ -1036,6 +1068,8 @@ export function createGame(canvas) {
       if (body.down <= 0) {
         body.down = 0;
         body.bleed = 0;
+        // The body may still be falling: let it land before it gets up.
+        releaseRagdoll(actor);
         setPose(actor, 'getup');
       }
     }
@@ -1851,6 +1885,9 @@ export function createGame(canvas) {
     crushPeople(dt);
     unclipPeople();
     tickBodies(dt);
+    // The bodies are placed before the engine writes its result, so the
+    // ragdoll's local pose is measured against where the actor already is.
+    stepRagdolls(dt);
     separatePeople();
     blood.update(dt);
     updateHud();

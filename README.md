@@ -21,6 +21,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield. Traffic cars with clear glass carry a driver you can see inside
 - Vehicle cabins: passenger cars have a lined cabin with seats, a dashboard and a steering wheel, and clear glass, so the interior reads from outside. Box-bodied vans, buses and trucks keep their tinted panes. Taking a car hides the NPC driver and puts the player in the seat
 - Building and vehicle-body collision. A stopped car is solid. A body that hits something slides along it instead of sticking to it, and one that ends up wedged inside climbs back out. Cars transfer momentum to people too: a light touch nudges them aside, a faster hit knocks them down, bleeds and slides them along the road, and only a hard hit at speed kills. People and cars follow the ground height and stay on walkable ground
+- A person who is knocked down really falls: the body goes to a physics engine, the joints are held together by constraints, it hits the walls and tumbles, settles where it lands, and gets back up from that pose
 - Momentum in car crashes: any two cars that touch exchange momentum by closing speed and mass ratio. Parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
 - GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
@@ -181,6 +182,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/building.js` | One shared building builder: brick row houses, shopfronts, convenience stores, water towers, warehouses, hospitals, police stations and the safehouse, also used by the collection gallery |
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
+| `src/ragdoll.js` | The ragdoll: a knocked down person hands every joint to a physics engine, the joints are held together by constraints, and the pose it lands in is kept for the get up |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |

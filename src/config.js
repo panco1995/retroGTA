@@ -1,4 +1,4 @@
-import map from '../data/saint-marks.json';
+import map from '../data/saint-marks.json' with { type: 'json' };
 
 export const MAP = map;
 

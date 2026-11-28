@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { WALK_TOP, colorOf } from './config.js';
 import { animateActor, createActor, setPose } from './actor.js';
 import { blocked, moveCircle, nearby } from './collision.js';
+import { releaseRagdoll } from './ragdoll.js';
 
 // The crowd streams around the player: a slot only spawns on a sidewalk that
 // is off camera, and only leaves once it is far away and out of view.
@@ -755,6 +756,8 @@ export function createPedestrianCrowd({
     actor.group.visible = true;
     actor.group.position.set(slot.x, WALK_TOP + world.ground(slot.x, slot.z), slot.z);
     actor.group.rotation.y = slot.heading;
+    // The actor may still be lying on the ground from an earlier hit.
+    releaseRagdoll(actor);
     if (actor.pose === 'down' || actor.pose === 'getup') setPose(actor, 'stand');
     active.push(slot);
     return true;
@@ -773,11 +776,15 @@ export function createPedestrianCrowd({
   }
 
   function placeActor(slot, actor, speed, dt, time) {
-    const head = actor.parts.head;
-    head.rotation.y += (0 - head.rotation.y) * Math.min(1, dt * 6);
-    head.rotation.x += (0 - head.rotation.x) * Math.min(1, dt * 6);
-    const arm = actor.parts.rightArm;
-    arm.rotation.z += (0 - arm.rotation.z) * Math.min(1, dt * 8);
+    // While the engine holds the body, it decides where the head and the arm
+    // point as well.
+    if (!actor.ragdoll) {
+      const head = actor.parts.head;
+      head.rotation.y += (0 - head.rotation.y) * Math.min(1, dt * 6);
+      head.rotation.x += (0 - head.rotation.x) * Math.min(1, dt * 6);
+      const arm = actor.parts.rightArm;
+      arm.rotation.z += (0 - arm.rotation.z) * Math.min(1, dt * 8);
+    }
 
     actor.x = slot.x;
     actor.z = slot.z;

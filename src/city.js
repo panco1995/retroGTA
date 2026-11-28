@@ -13,9 +13,10 @@ import {
   deg,
   hash,
 } from './config.js';
-import { glow, solid, windowMat } from './materials.js';
+import { solid, windowMat } from './materials.js';
 import { buildingHeight, createBuilding } from './building.js';
 import { insidePolygon } from './collision.js';
+import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
 import { createVehicle } from './vehicle.js';
 
@@ -269,42 +270,22 @@ export function buildCity() {
   }
 
   function addDumpster(x, z, rot = 0) {
-    const dump = new THREE.Group();
-    dump.position.set(x, 0, z);
-    dump.rotation.y = rot;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.15, 1.05), solid(0x24362c, 0.7));
-    body.position.y = WALK_TOP + 0.7;
-    body.castShadow = true;
-    dump.add(body);
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.08, 1.12), solid(0x1c2c24, 0.55));
-    lid.position.y = WALK_TOP + 1.3;
-    lid.rotation.x = -0.15;
-    dump.add(lid);
+    const { group: dump, collider } = buildDumpster({ x, z, rot });
+    dump.position.y = WALK_TOP + groundHeight(x, z);
     group.add(dump);
-    // The body is 1.7 across and 1.05 deep, and the collider has to follow
-    // the rotation instead of pretending the box is axis aligned.
-    colliders.push({ obb: true, x, z, heading: rot, halfL: 0.53, halfW: 0.85 });
+    colliders.push(collider);
   }
 
   function addLamp(x, z, roadX, roadZ) {
     const dx = roadX - x;
     const dz = roadZ - z;
     const len = Math.hypot(dx, dz) || 1;
-    const ux = dx / len;
-    const uz = dz / len;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.5, 6), metal);
-    pole.position.set(x, WALK_TOP + 2.25, z);
-    pole.castShadow = true;
-    group.add(pole);
-    const arm = box(Math.abs(ux) > 0.5 ? 0.85 : 0.08, 0.06, Math.abs(uz) > 0.5 ? 0.85 : 0.08, metal, x + ux * 0.38, WALK_TOP + 4.45, z + uz * 0.38, { cast: true });
-    arm.receiveShadow = false;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.22), glow(0xffe6b0, 0.45));
-    head.position.set(x + ux * 0.72, WALK_TOP + 4.32, z + uz * 0.72);
-    if (Math.abs(ux) > 0.5) head.rotation.y = Math.PI / 2;
-    group.add(head);
-    // Only the pole is at body height. The arm hangs over the road well
-    // above a car, so it does not stop anything.
-    colliders.push({ circle: true, x, z, radius: 0.14 });
+    // The arm leans over the road, so the post turns to face it.
+    const rot = Math.atan2(-dz / len, dx / len);
+    const { group: lamp, collider } = buildLamp({ x, z, rot });
+    lamp.position.y = WALK_TOP + groundHeight(x, z);
+    group.add(lamp);
+    colliders.push(collider);
   }
 
   function hillSpec() {
@@ -723,37 +704,24 @@ export function buildCity() {
   }
 
   function addTree(x, z, scale = 1) {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.16 * scale, 1.3 * scale, 6), solid(0x5a4030, 0.9));
-    trunk.position.set(x, groundHeight(x, z) + WALK_TOP + 0.65 * scale, z);
-    trunk.castShadow = true;
-    group.add(trunk);
-    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.05 * scale, 8, 6), solid(0x2e4632, 0.95));
-    crown.position.set(x, groundHeight(x, z) + WALK_TOP + 1.9 * scale, z);
-    crown.castShadow = true;
-    group.add(crown);
-    // The trunk stops people; the crown is a canopy that hangs over the
-    // pavement, and blocking its whole footprint would wall the sidewalk off.
-    colliders.push({ circle: true, x, z, radius: 0.16 * scale + 0.06 });
+    const { group: tree, collider } = buildTree({ x, z, scale });
+    tree.position.y = WALK_TOP + groundHeight(x, z);
+    group.add(tree);
+    colliders.push(collider);
   }
 
   function addHydrant(x, z) {
-    const hydrant = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.48, 8), solid(0x8d2a24, 0.55));
-    hydrant.position.set(x, groundHeight(x, z) + WALK_TOP + 0.3, z);
+    const { group: hydrant, collider } = buildHydrant({ x, z });
+    hydrant.position.y = WALK_TOP + groundHeight(x, z);
     group.add(hydrant);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), solid(0xb7b2a8, 0.4, 0.4));
-    cap.position.set(x, groundHeight(x, z) + WALK_TOP + 0.58, z);
-    group.add(cap);
-    colliders.push({ circle: true, x, z, radius: 0.17 });
+    colliders.push(collider);
   }
 
   function addTrash(x, z) {
-    for (let i = 0; i < 3; i++) {
-      const bag = new THREE.Mesh(new THREE.SphereGeometry(0.18 + (i % 2) * 0.05, 6, 5), solid(0x2a2c28, 0.85));
-      bag.position.set(x + i * 0.28, groundHeight(x, z) + WALK_TOP + 0.16, z + (i - 1) * 0.12);
-      bag.scale.y = 0.8;
-      group.add(bag);
-    }
-    colliders.push({ circle: true, x: x + 0.28, z, radius: 0.34 });
+    const { group: trash, collider } = buildTrash({ x, z });
+    trash.position.y = WALK_TOP + groundHeight(x, z);
+    group.add(trash);
+    colliders.push(collider);
   }
 
   function addEl() {

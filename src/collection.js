@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { glow, solid } from './materials.js';
 import { createActor, setPose } from './actor.js';
 import { createBuilding } from './building.js';
 import { PED_KINDS } from './npc.js';
+import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { createVehicle, VEHICLE_COLORS, VEHICLE_TYPES } from './vehicle.js';
 import { onLangChange, t } from './i18n.js';
 import { codesFor, keyVars, onBindingsChange } from './bindings.js';
@@ -16,88 +16,6 @@ const INTERIOR_FOV = 58;
 // fixed overlay outside both menus; it gets its own small renderer so the
 // game's scene and camera are never disturbed, and the render loop only runs
 // while the page is open.
-
-// ---- street props -------------------------------------------------------
-
-function buildLamp() {
-  const group = new THREE.Group();
-  const metal = solid(0x2c2e32, 0.48, 0.45);
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.5, 8), metal);
-  pole.position.y = 2.25;
-  pole.castShadow = true;
-  group.add(pole);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.06, 0.08), metal);
-  arm.position.set(0.38, 4.45, 0);
-  arm.castShadow = true;
-  group.add(arm);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.22), glow(0xffe6b0, 0.45));
-  head.position.set(0.72, 4.32, 0);
-  group.add(head);
-  return group;
-}
-
-function buildHydrant() {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.48, 10), solid(0x8d2a24, 0.55));
-  body.position.y = 0.24;
-  body.castShadow = true;
-  group.add(body);
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), solid(0xb7b2a8, 0.4, 0.4));
-  cap.position.y = 0.52;
-  cap.castShadow = true;
-  group.add(cap);
-  for (const side of [-1, 1]) {
-    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.12, 8), solid(0x6f211c, 0.6));
-    nozzle.rotation.z = Math.PI / 2;
-    nozzle.position.set(side * 0.17, 0.3, 0);
-    nozzle.castShadow = true;
-    group.add(nozzle);
-  }
-  return group;
-}
-
-function buildTrash() {
-  const group = new THREE.Group();
-  for (let i = 0; i < 3; i += 1) {
-    const bag = new THREE.Mesh(
-      new THREE.SphereGeometry(0.18 + (i % 2) * 0.05, 8, 6),
-      solid(0x2a2c28, 0.85),
-    );
-    bag.position.set((i - 1) * 0.28, 0.16, (i - 1) * 0.12);
-    bag.scale.y = 0.8;
-    bag.castShadow = true;
-    group.add(bag);
-  }
-  return group;
-}
-
-function buildTree() {
-  const group = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.3, 8), solid(0x5a4030, 0.9));
-  trunk.position.y = 0.65;
-  trunk.castShadow = true;
-  group.add(trunk);
-  const crown = new THREE.Mesh(new THREE.SphereGeometry(1.05, 10, 8), solid(0x2e4632, 0.95));
-  crown.position.y = 1.9;
-  crown.castShadow = true;
-  group.add(crown);
-  return group;
-}
-
-function buildDumpster() {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.15, 1.05), solid(0x24362c, 0.7));
-  body.position.y = 0.7;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.08, 1.12), solid(0x1c2c24, 0.55));
-  lid.position.y = 1.3;
-  lid.rotation.x = -0.15;
-  lid.castShadow = true;
-  group.add(lid);
-  return group;
-}
 
 // ---- catalog ------------------------------------------------------------
 
@@ -124,12 +42,14 @@ const PEOPLE = PED_KINDS.map((kind) => ({
   },
 }));
 
+// The street props are the same ones the city places, so the gallery shows
+// the real thing rather than a second, slightly different copy.
 const PROPS = [
-  { id: 'lamp', nameKey: 'prop_lamp', build: buildLamp },
-  { id: 'hydrant', nameKey: 'prop_hydrant', build: buildHydrant },
-  { id: 'trash', nameKey: 'prop_trash', build: buildTrash },
-  { id: 'tree', nameKey: 'prop_tree', build: buildTree },
-  { id: 'dumpster', nameKey: 'prop_dumpster', build: buildDumpster },
+  { id: 'lamp', nameKey: 'prop_lamp', build: () => buildLamp() },
+  { id: 'hydrant', nameKey: 'prop_hydrant', build: () => buildHydrant() },
+  { id: 'trash', nameKey: 'prop_trash', build: () => buildTrash() },
+  { id: 'tree', nameKey: 'prop_tree', build: () => buildTree() },
+  { id: 'dumpster', nameKey: 'prop_dumpster', build: () => buildDumpster() },
 ];
 
 // One sample per kind of building the city generates. Buildings bake texture

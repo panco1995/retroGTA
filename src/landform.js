@@ -228,6 +228,13 @@ export function buildFeatureMeshes(features, materials = {}) {
       const mesh = rampMesh(f, mat, LIFT);
       mesh.receiveShadow = true;
       group.add(mesh);
+      if (f.opts.skirt !== undefined) {
+        const sides = rampSides(f, f.opts.skirt, LIFT);
+        if (sides) {
+          sides.receiveShadow = true;
+          group.add(sides);
+        }
+      }
       continue;
     }
     const [a, b, c, d] = f.corners;
@@ -288,6 +295,53 @@ function rampMesh(f, mat, lift) {
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return new THREE.Mesh(geo, mat);
+}
+
+// The two sides of a raised piece of ground, drawn as the ground falls away
+// from the edge of the surface down to the level it stands on.
+//
+// Without this a ramp is a sheet of paper: its surface meets the flat ground at
+// its edge with nothing underneath, and from the side you can see straight
+// through it. The face is drawn from the surface edge down to `bottomY`, so the
+// climb reads as earth rather than as a painted stripe.
+//
+// It is a wall rather than a slope on purpose. This is the side of a raised
+// road, and the honest way to hold up a raised road is a retaining wall: a
+// sloped embankment would eat several metres of the pavement beside it, which
+// is where people walk.
+function rampSides(f, bottomY, lift) {
+  const inX = f.axis === 'z';
+  const steps = Math.max(8, Math.ceil(Math.abs(f.run) / 1.5));
+  const positions = [];
+  for (let i = 0; i < steps; i += 1) {
+    const t0 = i / steps;
+    const t1 = (i + 1) / steps;
+    const a0 = f.from + f.run * t0;
+    const a1 = f.from + f.run * t1;
+    const y0 = f.heightOn(t0) + lift;
+    const y1 = f.heightOn(t1) + lift;
+    const crosses = inX ? [f.minX, f.maxX] : [f.minZ, f.maxZ];
+    for (const cross of crosses) {
+      const p0 = inX ? [cross, y0, a0] : [a0, y0, cross];
+      const p1 = inX ? [cross, y1, a1] : [a1, y1, cross];
+      const b0 = inX ? [cross, bottomY, a0] : [a0, bottomY, cross];
+      const b1 = inX ? [cross, bottomY, a1] : [a1, bottomY, cross];
+      // Skip a step that is already at or below the ground it would fall to.
+      if (y0 <= bottomY && y1 <= bottomY) continue;
+      positions.push(
+        ...p0, ...p1, ...b1,
+        ...p0, ...b1, ...b0,
+      );
+    }
+  }
+  if (positions.length === 0) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+  const sideMat = new THREE.MeshStandardMaterial({
+    color: 0x4a443c, roughness: 1, side: THREE.DoubleSide,
+  });
+  return new THREE.Mesh(geo, sideMat);
 }
 
 let fallbackMat = null;

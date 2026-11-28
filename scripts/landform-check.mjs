@@ -185,5 +185,54 @@ function check(label, ok, detail = '') {
     `worst jump ${(armJump * 100).toFixed(2)}%, against ${(armStraight * 100).toFixed(1)}% for a straight one`);
 }
 
+// Two pieces that meet do so without a step, and a raised piece of ground is
+// closed at the sides.
+//
+// A ramp is drawn as a strip of quads over its own curve, which is a surface
+// with no thickness: from the side you could see under it, and the ground it
+// stands on showed through. The sides are drawn from the surface edge down to
+// the level the piece stands on, so a climb reads as earth rather than a
+// painted stripe. This checks that they are there, and that they run the
+// height of the climb rather than stopping partway.
+{
+  const { buildFeatureMeshes } = await import('../src/landform.js');
+  const THREE = await import('three');
+  const f = ramp({
+    axis: 'z', from: -7, to: -41,
+    cross0: -120.2, cross1: -99.8,
+    y0: 0, y1: 5.2, ease: 8,
+    opts: { material: 'hill', skirt: -0.1 },
+  });
+  const built = buildFeatureMeshes([f], {});
+  const meshes = [];
+  built.traverse((o) => {
+    if (o.isMesh) meshes.push(o);
+  });
+  check('a ramp is drawn with its sides, not as a bare sheet', meshes.length === 2,
+    `${meshes.length} meshes`);
+
+  const sides = meshes[1];
+  if (!sides) {
+    check('the sides reach the bottom of the climb', false, 'no side mesh to check');
+    check('the sides reach the top of the climb', false, 'no side mesh to check');
+    check('the sides are on the two edges of the climb, not across it', false, 'no side mesh to check');
+  } else {
+    const pos = sides.geometry.getAttribute('position');
+    let low = Infinity;
+    let high = -Infinity;
+    const edges = new Set();
+    for (let i = 0; i < pos.count; i += 1) {
+      low = Math.min(low, pos.getY(i));
+      high = Math.max(high, pos.getY(i));
+      edges.add(pos.getX(i).toFixed(1));
+    }
+    check('the sides reach the bottom of the climb', low <= 0, `lowest ${low.toFixed(2)}`);
+    check('the sides reach the top of the climb', high >= 5.2, `highest ${high.toFixed(2)}`);
+    check('the sides are on the two edges of the climb, not across it',
+      edges.size === 2, `${edges.size} distinct edges: ${[...edges].join(', ')}`);
+  }
+  void THREE;
+}
+
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

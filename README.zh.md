@@ -13,6 +13,16 @@
   <img src="docs/iso.png" alt="安全屋外的 2.5D 视角" width="49%">
 </p>
 
+## 在线玩
+
+每次推送到 `main` 都会发布到 GitHub Pages：
+**https://panco1995.github.io/retroGTA/**
+
+不用安装任何东西，浏览器直接打开就能玩。发布的是单个 HTML 文件，没有会丢的外部资源。
+
+工作流在 `.github/workflows/publish.yml`：安装依赖、跑 `npm run check`、用
+`npm run build:single` 构建，只发布产物。检查不过就停止发布，坏掉的提交到不了站点。
+
 ## 功能
 
 - 徒步、奔跑、跳跃、徒手攻击、从车身任意一侧上车、驾驶和刹车

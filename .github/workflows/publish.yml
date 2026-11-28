@@ -1,0 +1,73 @@
+# Builds the game and publishes it to GitHub Pages, so anyone can play it at
+# https://<owner>.github.io/<repo>/ without installing anything.
+#
+# The game is a Vite project with dependencies, so it cannot be served from the
+# repository as it stands: it has to be built first. The build runs here, and
+# only what comes out of it is published - `dist` is in .gitignore and stays
+# out of the history.
+#
+# It is built as a single file. The game is one page with one script and one
+# stylesheet, and inlining them means the page works from any path GitHub might
+# serve it under, with no `base` to keep in step with the repository name.
+#
+# The checks run before the build: a red check stops the publish, so a broken
+# commit cannot reach the published site.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  # So the site can be rebuilt without an empty commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and a newer push wins over an older one still running.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check
+        run: npm run check
+
+      - name: Build
+        run: npm run build:single
+
+      # Pages wants the file it serves to be called index.html.
+      - name: Lay out the site
+        run: |
+          mkdir -p site
+          cp dist/retrogta.html site/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

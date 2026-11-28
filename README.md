@@ -13,6 +13,18 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
   <img src="docs/iso.png" alt="2.5D camera outside the safehouse" width="49%">
 </p>
 
+## Play
+
+The game is published to GitHub Pages on every push to `main`:
+**https://panco1995.github.io/retroGTA/**
+
+Nothing to install — it runs in a browser. It is built as one HTML file, so the
+published page has no assets to go missing.
+
+The workflow is `.github/workflows/publish.yml`: it installs, runs `npm run
+check`, builds with `npm run build:single`, and publishes only what comes out.
+A failing check stops the publish, so a broken commit cannot reach the site.
+
 ## Features
 
 - Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake

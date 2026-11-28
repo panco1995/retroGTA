@@ -2,46 +2,42 @@
 
 [中文](README.zh.md)
 
-A GTA-like game prototype built with Three.js. The map lives in a JSON file and the geometry is generated in code. The playable area is the east island.
-
-## Screenshots
-
-Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
+A GTA-style prototype built with Three.js. The map is data, the geometry is generated from it.
 
 <p>
-  <img src="docs/follow.png" alt="Follow camera outside the safehouse" width="49%">
-  <img src="docs/iso.png" alt="2.5D camera outside the safehouse" width="49%">
+  <img src="docs/follow.png" alt="Follow camera on the hill road" width="49%">
+  <img src="docs/iso.png" alt="2.5D camera at the same spot" width="49%">
 </p>
 
 ## Play
 
-The game is published to GitHub Pages on every push to `main`:
-**https://panco1995.github.io/retroGTA/**
+**https://panco1995.github.io/retroGTA/** — nothing to install, it runs in the browser.
 
-Nothing to install — it runs in a browser. It is built as one HTML file, so the
-published page has no assets to go missing.
-
-The workflow is `.github/workflows/publish.yml`: it installs, runs `npm run
-check`, builds with `npm run build:single`, and publishes only what comes out.
-A failing check stops the publish, so a broken commit cannot reach the site.
+Every push to `main` publishes. The workflow installs, runs `npm run check`, builds to a single HTML file, and publishes only what comes out; a failing check stops the publish.
 
 ## Features
 
-- Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake
-- Four cameras: follow, first-person, top-down, and 2.5D
-- Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
-- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield. Every traffic car carries a driver you can see inside
-- Vehicle cabins: every vehicle has a lined cabin with seats, a dashboard and a steering wheel, and clear glass, so the interior reads from outside. The box-bodied vans, buses and trucks get there the same way the cars do: their body is a shell of panels with the windows cut out of it. Taking a car hides the NPC driver and puts the player in the seat, sitting on that vehicle's cushion with their head under its roof
-- Building and vehicle-body collision. A stopped car is solid. A body that hits something slides along it instead of sticking to it, and one that ends up wedged inside climbs back out. Cars transfer momentum to people too: a light touch nudges them aside, a faster hit knocks them down, bleeds and slides them along the road, and only a hard hit at speed kills. People and cars follow the ground height and stay on walkable ground
-- A person who is knocked down really falls: the body goes to a physics engine, the joints are held together by constraints, it hits the walls and tumbles, settles where it lands, and gets back up from that pose
-- Momentum in car crashes: any two cars that touch exchange momentum by closing speed and mass ratio. Parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
-- GTA-style radar minimap, plus a full-island map (M, or from the pause menu)
-- Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
-- Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
-- Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
-- Collection gallery: all 12 vehicles, the 12 pedestrian kinds, five street props, and eight building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
-- Cheats spawn a chosen vehicle beside the player; restart removes them
-- English and Chinese interface
+**Driving.** Walk, run, jump, punch, get in from either side, drive and brake. Four cameras: follow, first-person, top-down, 2.5D.
+
+**Cars that follow the ground.** A car sits on its four wheels, not on the ground under its middle: each wheel reads the ground where it is, and the body's pitch and roll come from how the four heights differ. A wheel driven up a kerb lifts that corner alone. Each has spring travel.
+
+**Cars that leave the ground.** A car carries its own vertical speed, so the crest of the hill throws it into the air and it lands with a shove into the springs. A slope is followed, not launched off — what counts as a crest is how sharply the grade changes.
+
+**Ground with a surface.** Height, lean and material in one place. Sand takes grip and top speed away; a pavement is a little slower than the road. Everything asks the same object, so a car and a person always stand on the same answer.
+
+**Collision with a sense of height.** A collider can carry `minY`/`maxY` and is then only in the way of a vehicle whose own range overlaps. The side of a hill is solid without walling off the street at its foot, where the hill is level with the street.
+
+**One physics world.** Everything that falls shares it: people knocked down and furniture thrown by a car. One gravity for the whole game. Anything given to the world falls, lands and hits what is nearby without being registered anywhere.
+
+**Knocked-down people really fall.** Each joint becomes a rigid body, the seams become constraints, and the pose it lands in is kept for the get up.
+
+**Pedestrians.** Hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits at curbs, dodges cars, chats and idles. They do not walk through each other or through parked cars.
+
+**Ambient traffic.** Cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. Every traffic car carries a driver you can see inside.
+
+**Street furniture that reacts.** A car throws the rubbish bags and the hydrant, shoves the skip, and knocks the lamp post over — it falls about its foot, lands across the road and sparks from its live cable. A tree is taller than a car and does not come down.
+
+**Also.** Momentum in car crashes. Radar minimap and a full-island map (M). Contextual key prompts. Main and pause menus with shared settings: language, camera, rebindable keys. Collection gallery of every vehicle, pedestrian, street prop and building. Cheats. English and Chinese.
 
 ## Run
 
@@ -49,170 +45,147 @@ Node.js 18 or newer.
 
 ```bash
 npm install
-npm run dev
+npm run dev      # http://127.0.0.1:5173/
 ```
 
-Open the local address printed in the terminal (default `http://127.0.0.1:5173/`).
-
 ```bash
-npm run build    # writes dist/
-npm run preview  # serves the build
-make             # same build, writes dist/
-make single      # one file, dist/retrogta.html
+npm run check        # the checks, ~2 s
+npm run build        # writes dist/
+npm run build:single # one file, dist/retrogta.html
+npm run preview      # serves the build
 ```
 
 ## Controls
 
-Choose Start on the main menu. In the follow and first-person cameras, move the mouse to look around. First person works on foot and from the driver's seat, where the view follows the car as it turns. Esc pauses; press it again to resume, then click the picture to lock the pointer. The top-down and 2.5D cameras are fixed, and movement keys move relative to the screen.
+Start from the main menu. Follow and first-person turn with the mouse; the first-person camera works on foot and behind the wheel, and follows the car's heading. `Esc` pauses, `Esc` again resumes, then click to recapture the mouse. Top-down and 2.5D are fixed, and the movement keys go by the screen.
 
-Rebind keys in Settings → Controls → Keyboard, in either menu: click a binding, then press a key or mouse button. Esc cancels. A key already used by another action swaps with it. Reset keys restores the defaults. Bindings are saved in the browser, and Esc always pauses. The camera can also be picked directly in Settings → View; it stays in sync with the V key.
+Keys are rebindable in **Settings → Controls → Keyboard**: click an action, press the new key. `Esc` always pauses.
 
 | Key | On foot | Driving |
 | --- | --- | --- |
 | W A S D | Move relative to the camera | Throttle, brake / reverse, steer |
 | Shift | Run | — |
-| Mouse | Turn the follow camera | Turn the follow camera |
-| V | Cycle follow, first-person, top-down, and 2.5D | Cycle follow, first-person, top-down, and 2.5D |
-| M | Toggle the full-island map | Toggle the full-island map |
-| E | Walk to the nearer side and get in | Exit when moving slowly |
+| V | Cycle cameras | Cycle cameras |
+| M | Full-island map | Full-island map |
+| E | Get in, from the near side | Get out when slow |
 | Space | Jump | Brake |
-| Left click | Punch | — |
-| Esc | Pause: resume, restart, settings, map, cheats, or exit | Pause: resume, restart, settings, map, cheats, or exit |
+| Left mouse | Punch | — |
+| Esc | Pause | Pause |
 
-The round radar at the bottom left shows the area around the player and rotates so the player faces up; driving fast widens the view. The arrow is the player, the cyan dot is the safehouse, and white dots are parked vehicles. Moving traffic and pedestrians are not shown. The pause map shows the whole island with north up. While driving, the top-right readout shows speed in km/h; reverse speed is negative.
+The radar shows the area around the player, rotating with heading, and widens with speed. The arrow is the player, the cyan dot the safehouse, white dots are parked cars; moving traffic and pedestrians are not shown. The pause map shows the whole island, north up.
 
 ## Collection
 
-The main menu and the pause menu both have a Collection page. It is a full-screen gallery with four tabs:
+A full-screen gallery from the main menu or the pause menu, in four tabs: **Vehicles** (all 12), **People** (all 12 kinds), **Street props** (lamp, hydrant, rubbish bags, tree, skip) and **Buildings** (eight types). Each sits on a turntable: drag to rotate, scroll to zoom, arrow keys to step through.
 
-- **Vehicles** — all 14 vehicle types, in the same paint as the cheat menu
-- **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
-- **Cars that leave the ground** — a car carries its own vertical speed, so coming over the crest of the hill throws it into the air and it comes down with a shove into the springs. A slope is followed, not launched off: what counts as a crest is how sharply the grade changes, so a car going down a steep hill stays on it
-- **Ground that leans** — a hill the car climbs with its nose up and its body following the slope across it, and sand that takes grip and top speed away. The ground is one surface object, so adding a new kind — a beach, a yard, a ramp — is a polygon and a name in the map
-- **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster. A car throws the bags and the hydrant, shoves the skip, and knocks the lamp post over; the post falls about its foot, lands across the road, and sparks from its live cable until the scene is reset. A tree is older than the street: it is taller than a car and does not come down
-- **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, a hospital, a police station, and the safehouse, all from the city's shared building builder
-
-Pick from the list, or use the left and right arrow keys, to step through the items in the current tab. The model sits on a turntable: drag to rotate it and scroll to zoom.
-
-Vehicles with a modelled cabin also show an **Interior view** button beside the item controls. It puts the camera in the same driver's seat the first-person driving view uses, hides the windshield, and turns dragging into a free look around the cabin. The E key, or whichever key is bound to entering and exiting a car, toggles it as well. Switching between vehicles keeps the interior view; switching to people or props returns to the exterior.
-
-Cars that carry a driver also show a **Driver NPC** toggle next to it. It seats or removes the driver in the outside view; the toggle disappears while the interior camera is in use, and the chosen state carries over between vehicles.
-
-## Interface language
-
-Switch the interface in Settings → Language, in either the main or pause menu (the settings page is shared). The choice is saved in the browser.
-
-- English (`en`) — default
-- Chinese (`zh`)
+Vehicles also offer an **Interior view** that puts the camera in the driver's seat with the windshield hidden. Cars with a driver have a **Driver NPC** toggle.
 
 ## Map data
 
-Y is up, +X is east, and +Z is south. The island lives in [`data/saint-marks.json`](data/saint-marks.json); `src/city.js` reads it and builds the meshes. People and cars follow the surface height and can stand only on the island, the bridge deck, or the landing. The safehouse sits at the foot of the riverside avenue on the west side, with its door facing west toward the slope.
+Y is up, +X is east, +Z is south. The island is [`data/saint-marks.json`](data/saint-marks.json); `src/city.js` reads it and builds the meshes.
 
-| Element | Notes |
+| Key | What it is |
 | --- | --- |
-| `roads` | Orthogonal road grid. Sidewalks, crosswalks, street lamps, and the ambient traffic lane loops are generated along it |
-| `blocks` | `residential` places row houses on the north and south edges. `industrial` places two south-facing warehouses. `alley` adds two dumpsters in the gap |
-| `rows` | A named house row: width, floors, wall color, shop, awning, fire escape, roof tank |
-| `safehouse` | One safehouse; the file includes it |
-| `stores` | Hand-placed convenience stores: position, front face, wall color and sign. The city builds them with the same house builder as the row houses |
-| `landmarks` | Hand-placed hospitals and police stations: `type` picks the building style, plus position, front face, size, floors, wall color and sign |
-| `hill` | The slope and the raised intersection outside the safehouse |
-| `island`, `beach`, `landing` | Coast, sand, and the far side of the bridge |
-| `diagonals` | Diagonal roads |
-| `bridge` | One bridge, deck at road height, with side towers |
-| `water` | One water plane |
-| `gate` | One gate and a short approach road |
-| `trees` | Placed trees |
-| `safehouseProps` | `hydrant` and `trash` |
-| `vehicles` | 14 types; see [Vehicles](#vehicles). Unknown types fall back to `sedan`. Every parked vehicle can be entered; `driveable` marks the car the player starts next to. Ambient traffic can be carjacked too |
-| `pedestrians` | Fixed people who walk a path, with shirt, pants, and an optional cap. Separate from the runtime crowd; see [Pedestrians](#pedestrians) |
-| `bounds` | The reader accepts extra collision walls. The current map leaves this field out |
+| `roads` | The orthogonal grid. Pavements, crossings, lamps and the lane loops follow from it |
+| `blocks` | `residential` puts row houses on the north and south of a block, `industrial` puts two warehouses, `alley` puts skips in the middle |
+| `rows` | Hand-placed rows of houses: width, floors, wall colour, shopfront, awning, fire escape, roof tank |
+| `safehouse`, `stores`, `landmarks` | The safehouse, convenience stores, and the hospital and police station |
+| `hill` | The climb outside the safehouse, with its `features`: the pieces of ground it is made of |
+| `island`, `beach`, `landing` | Coast, beach, and the far landing of the bridge |
+| `diagonals` | A road at any angle |
+| `bridge`, `water`, `gate` | The bridge, the sea, and the gate with its approach |
+| `trees`, `safehouseProps` | Trees, and the hydrant and rubbish bags by the safehouse |
+| `vehicles`, `pedestrians` | 12 vehicle types and the hand-placed walkers |
+| `bounds` | Extra collision walls; not used by this map |
 
-A position can be an absolute `x` / `z`, an offset from the safehouse door (`dx` / `dz`), or a `lane` (`curbNorth`, `pedSouth`, `sidewalkWest`, and so on). Vehicle and pedestrian `heading` values are degrees.
+Positions are absolute `x` / `z`, relative to the safehouse door as `dx` / `dz`, or a `lane` name. Headings are in degrees.
 
-## Vehicles
+### Terrain
 
-Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unknown types fall back to `sedan`.
+The ground is a list of pieces the map declares in `hill.features`:
 
-| `type` | Vehicle | Notes |
+```json
+{ "kind": "ramp", "axis": "z", "from": -7, "to": -41,
+  "cross": [-120.2, -99.8], "y": [0, 5.2], "ease": 8 }
+{ "kind": "flat", "rect": [-120.2, -55, -99.8, -41], "y": 5.2 }
+```
+
+A piece answers how high it is and draws itself from the same numbers, so the ground that is drawn and the ground that is stood on cannot drift apart. A `ramp` eases the grade in and out of each end, so a climb meets the flat street without a fold. Reshaping the ground, or adding a second hill, is a change to the map and not to the code.
+
+### Vehicles
+
+| `type` | | |
 | --- | --- | --- |
-| `sedan` | Sedan | Four-door three-box car, the default; the car the player starts next to |
+| `sedan` | Sedan | Four-door, the default; the car the player starts next to |
 | `taxi` | Taxi | Sedan body with a roof sign |
-| `hatchback` | Hatchback | Short body with a liftback tailgate |
+| `hatchback` | Hatchback | Short body, liftback tailgate |
 | `suv` | SUV | Tall body, roof rails, larger wheels |
-| `pickup` | Pickup | Separate cab and open cargo bed |
+| `pickup` | Pickup | Separate cab and open bed |
 | `sports` | Sports car | Low body, fastback glass, rear wing |
 | `van` | Van | Tall enclosed cargo body |
 | `bus` | City bus | 10.6 m body, long side windows |
-| `truck` | Box truck | Cab-over cab, large cargo box, dual rear wheels |
-| `ambulance` | Ambulance | White box body, red stripe, red cross, light bar |
-| `firetruck` | Fire truck | Red body, equipment box, roof ladder, light bar, six wheels |
-| `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
+| `truck` | Box truck | Cab-over cab, cargo box, dual rear wheels |
+| `ambulance` | Ambulance | White box, red stripe, red cross, light bar |
+| `firetruck` | Fire truck | Equipment box, roof ladder, light bar, six wheels |
+| `police` | Police car | Blue-and-white livery, red/blue light bar |
 
-Every vehicle has clear glass, so their seats and the driver show from outside. The box-bodied vans, buses and trucks are built as a shell of panels with the window openings cut out of it, so the glass sits in a real hole with the cabin behind it, the same as a car.
+Every vehicle has clear glass and a lined cabin; the box-bodied ones get there by cutting real holes in the panels. To add a type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the `type` on a vehicle in the map.
 
-Each vehicle also declares the size of its collision box, and the driver's seat. The seat is what puts the player in the right place: the character sits on the cushion of the vehicle it got into, so it fits under the roof instead of hanging out of it.
+### Pedestrians
 
-To add a type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the matching `type` on an entry in `data/saint-marks.json`.
+`src/npc.js` picks from `KINDS` by `weight`; each spawn randomises height, build, skin, hair and outfit.
 
-## Pedestrians
-
-The crowd draws from the kinds in `src/npc.js`. Hand-placed pedestrians in the map keep their own shirt, pants, and cap colors and walk their own paths.
-
-| Kind | Pedestrian | Notes |
+| | | |
 | --- | --- | --- |
-| `businessman` | Businessman | Suit, tie, briefcase, short hair, sometimes a cap. Medium pace |
-| `businesswoman` | Businesswoman | Blazer, skirt, handbag, long hair. Tights or bare legs, sometimes glasses |
-| `student` | Student | Hoodie or casual top, jeans or shorts, backpack, cap or beanie, headphones |
-| `schoolkid` | Schoolchild | Shorter and larger-headed, bright backpack and shorts. Faster than adults |
-| `tourist` | Tourist | Bright shirt, shorts, sun hat, backpack or tote. Walks slowly |
-| `jogger` | Jogger | Sleeveless top, shorts, sneakers, headphones. The fastest walker |
-| `constructionWorker` | Construction worker | Heavy build, hi-vis vest, hard hat, work boots |
-| `elderly` | Elderly person | Hunched, gray or white hair, cane, beanie or cap, glasses. The slowest |
-| `courier` | Courier | Uniform shirt and cap, large backpack. Brisk pace |
-| `shopper` | Shopper | Casual clothes, tote bag or handbag. Varied builds and hair |
-| `policeOfficer` | Police officer | Navy uniform, police cap, belt. Rare |
-| `punk` | Punk | Dyed hair, beanie, dark clothes, headphones |
+| `businessman` | Businessman | Suit, tie, briefcase |
+| `businesswoman` | Businesswoman | Blazer, skirt, handbag |
+| `student` | Student | Hoodie, jeans, backpack, headphones |
+| `schoolkid` | Schoolkid | Short, bright backpack, walks fast |
+| `tourist` | Tourist | Floral shirt, sun hat, camera bag, walks slow |
+| `jogger` | Jogger | Sleeveless, shorts, headphones, fastest |
+| `constructionWorker` | Construction worker | Heavy build, hi-vis vest, hard hat |
+| `elderly` | Elderly | Stooped, grey hair, cane, slowest |
+| `courier` | Courier | Uniform, cap, large bag |
+| `shopper` | Shopper | Casual, shopping bags |
+| `policeOfficer` | Police officer | Navy uniform, cap, belt; rare |
+| `punk` | Punk | Dyed hair, beanie, dark clothes |
 
-Weights in `KINDS` decide how often a kind appears; each spawn also rolls height, build, skin, hair, and clothing colors. To add a kind, append an entry to `KINDS` with a `weight` and a `make()` that returns the actor options (see the existing entries for the fields).
+The crowd reacts to traffic: it waits at the curb, hurries across when a car appears, and dodges a car that mounts the pavement. People and parked cars are solid to each other. Two walkers meeting sometimes stop to talk.
 
-The crowd reacts to traffic: people wait at the curb while a car comes through the crossing, hurry across if one approaches mid-crossing, and jump aside when a car heads straight for them on the sidewalk. A hit they do not dodge scales with the impact: a light bump shoves them aside, a faster hit knocks them down and slides them along with the car while they bleed, and a hard hit at speed kills them. A stopped car does not run anyone over. The player, the hand-placed pedestrians, and the crowd block each other. A punch sends nearby people running. Two walkers who meet sometimes stop to chat, and idle people look around, check a phone, or window-shop at the nearest shopfront. Hand-placed map pedestrians also run from a car driving straight at them, and bleed the same way if it hits them. If the player is run over, they reappear at the safehouse.
+## Ambient traffic
 
-## Traffic
+`src/city.js` derives a clockwise lane loop around each block whose four sides are unbroken road. Cars drive the right-hand lane, so neighbouring blocks give two-way traffic. They slow for corners and follow the car ahead, but do not stop for people. They spawn and despawn only off camera, and can be carjacked.
 
-`src/city.js` derives a clockwise lane loop around each city block whose four sides are unbroken roads. Cars drive the right-hand lane of each loop, so neighboring blocks give two-way traffic. They slow for corners and follow moving cars and the player's car, but they do not stop for people: driving through someone knocks them down or kills them. Traffic cars with clear glass are driven by an NPC you can see through the windows; the driver gives up the seat when you take the car. Cars spawn and despawn only outside the camera, like the pedestrian crowd. Ambient cars can be carjacked: target one with E and it stops while you walk to the nearer side. Once taken, it becomes a normal car and can be parked or driven like any other.
+## Layout
 
-## Project layout
-
-| File | Role |
+| File | |
 | --- | --- |
 | `src/main.js` | Entry point |
-| `src/menu.js` | Menu navigation for the main and pause menus, including the shared settings page and the collection overlay |
-| `src/collection.js` | Collection gallery: asset catalog, turntable camera, and the vehicle interior view |
 | `src/game.js` | Loop, cameras, walking and driving, HUD |
-| `src/city.js` | Builds roads and pavements (one builder, bent to the ground under it, so a diagonal road follows a slope instead of cutting into it), colliders, and the lane/sidewalk networks, and places the buildings from `building.js` |
-| `src/building.js` | One shared building builder: brick row houses, shopfronts, convenience stores, water towers, warehouses, hospitals, police stations and the safehouse, also used by the collection gallery |
-| `src/config.js` | Metrics exported from the map file, plus a stable hash |
-| `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
-| `src/ragdoll.js` | The ragdoll: a knocked down person hands every joint to the shared physics world, the joints are held together by constraints, and the pose it lands in is kept for the get up |
-| `src/physics.js` | One physics world, shared by everything that falls: the people knocked down and the street furniture a car hits. One gravity for the whole game, so a body falls at the same rate whether the engine is moving it or the game is working out a jump by hand. Bodies are sorted into collision groups, so a body is not shoved by the walls that were built for a flying skip; anything given to the world falls, lands and hits what is near it without being wired in anywhere |
-| `src/prop-physics.js` | Street furniture a car throws out of the way: the rubbish bags, the hydrant and the skip are handed to a physics engine and settle where they land. The collider travels with the prop and is the box around its body, so a skip that lands on its side blocks the road it actually covers. A prop on the move stays in the collision index, and a car that catches up with one shoves it instead of driving through it; the car itself goes into the engine as well, so a prop cannot tumble back through the bonnet. A lamp post is bolted at the foot, so it does not fly: it goes over about its base and stays down |
-| `src/shocks.js` | The sparks off a lamp post that has been knocked down: a burst when it lands, and a fitful flicker and more sparks for as long as it lies there |
-| `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
-| `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, and the 12 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
-| `src/landform.js` | The shape of the ground, as a list of pieces the map declares, in `hill.features`: a ramp, a flat shelf, a slope through four corners. Each answers how high it is and draws itself from the same numbers, so the ground that is drawn and the ground that is stood on cannot drift apart. Reshaping the island's ground, or adding a second hill, is a change to the map and not to the code. A `ramp` eases the grade in and out of each end, so a climb meets the flat street without a fold: the height and the gradient both match, and a car does not pitch all at once at the seam. Each piece answers how high it is and draws itself from the same four corners, so the ground that is drawn and the ground that is stood on cannot drift apart. A hill used to be two things that had to agree - a chain of ifs for the height and hand-rotated boxes for the mesh - and they did not: the east arm's road floated up to four metres above the ground under it |
-| `src/terrain.js` | The ground, as one object: a height, a lean, and what it is made of. Everything asks it, so a car and a walking person are always standing on the same answer. The lean comes from the height by sampling either side, at a step that narrows near a kerb so the flat beside it stays flat. Each material has its own grip and drag, so sand is slower and steers less than asphalt |
-| `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge. A collider may carry `minY`/`maxY`, and is then only in the way of a vehicle whose own height range overlaps it: that is what lets the side of a hill be solid without walling off the street at the foot of it, where the hill is level with the street |
-| `src/spatial.js` | Spatial index for the colliders: the static ones are bucketed into a grid and queried by cell, the ones that move (cars) are kept on a short list that is always tested |
-| `src/props.js` | Street furniture: lamp posts, hydrants, rubbish bags, trees and skips. The city and the collection gallery share one model for each, and the collider is written next to the geometry. A prop that a car can throw also says what it weighs and how it is thrown, in the same function |
-| `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
+| `src/city.js` | Roads, pavements, colliders, lane and sidewalk networks, buildings |
+| `src/landform.js` | The pieces of ground: a ramp, a flat shelf, a slope through four corners. Each answers its height and draws itself |
+| `src/terrain.js` | Height, lean and material; how a car sits on its wheels |
+| `src/collision.js` | Circle and rectangle collision, the walkable region, height-aware colliders |
+| `src/spatial.js` | Spatial index: static colliders in a grid, moving ones on a list always checked |
+| `src/physics.js` | The one physics world, the one gravity, the collision groups |
+| `src/prop-physics.js` | Street furniture thrown by a car: how it flies, lands, blocks the road it lands on |
+| `src/ragdoll.js` | A knocked-down person: every joint a body, the seams constraints |
+| `src/shocks.js` | Sparks from a lamp post that has been knocked down |
+| `src/vehicle.js` | The 12 vehicle builders, driving state, wheels and suspension |
+| `src/actor.js` | The person model: joints merged per material, walk, seated and down poses |
+| `src/npc.js` | Pedestrian kinds, the sidewalk graph, the streamed crowd |
+| `src/traffic.js` | Block lane loops, ambient traffic, car following |
+| `src/building.js` | The shared building builder, also used by the collection gallery |
+| `src/props.js` | Street furniture; the city and the gallery share one model per prop |
+| `src/collection.js` | The collection gallery: catalogue, turntable camera, interior view |
+| `src/menu.js` | Menu navigation and the shared settings page |
+| `src/minimap.js` | Radar and the full-island map |
+| `src/blood.js` | Blood left on the ground |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
-| `src/i18n.js` | English and Chinese interface strings |
+| `src/i18n.js` | English and Chinese strings |
 | `src/bindings.js` | Key bindings, saved in the browser |
 | `src/input.js` | Keyboard and pointer lock |
-| `src/minimap.js` | Radar minimap and the full-island pause map |
 | `src/style.css` | HUD and menu styles |
-| `index.html` | Page shell and HUD markup |
-| `data/saint-marks.json` | Map: roads, blocks, landmarks, vehicles, and pedestrians |
+| `index.html` | Page structure and HUD |
+| `data/saint-marks.json` | The map |
+| `scripts/*-check.mjs` | The checks behind `npm run check` |

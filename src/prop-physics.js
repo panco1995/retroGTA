@@ -22,8 +22,14 @@ import * as CANNON from 'cannon-es';
 import { WALK_TOP } from './config.js';
 import { buildWalls, createWorld } from './physics.js';
 
-// How long a prop may be in the air before it is stopped where it lies.
+// How long a prop may be in the air before it is stopped where it lies. It is
+// only stopped once it is back on the ground: a prop frozen in mid air would
+// hang there, and a car would then hit a wall that was not there a frame ago.
 const MAX_TIME = 6;
+// The length of rope after that. A prop that never comes down - wedged, or on
+// the end of a bumper that does not let it go - is still stopped eventually,
+// so that nothing is left in the engine for ever.
+const MAX_HANG = 3;
 // How slow it has to be to count as still.
 const REST_SPEED = 0.45;
 // How slow it has to be turning to count as still.
@@ -121,13 +127,18 @@ export function createPropPhysics({ colliders, ground }) {
     // sleep on, and a prop that falls asleep in mid air would hang there.
     body.allowSleep = false;
 
-    // The prop keeps the way it was standing: the body starts turned the way
-    // the prop was turned.
-    const turn = new CANNON.Quaternion();
-    turn.setFromEuler(0, entry.start.heading, 0);
+    // The prop starts turned the way it is standing now, which is not the way
+    // it was built once it has been thrown and landed on its side: a skip hit
+    // a second time must not snap back upright before it flies.
+    const group = entry.group;
+    const turn = new CANNON.Quaternion(
+      group.quaternion.x,
+      group.quaternion.y,
+      group.quaternion.z,
+      group.quaternion.w,
+    );
     const at = new CANNON.Vec3(spec.at[0], spec.at[1], spec.at[2]);
     const centre = turn.vmult(at);
-    const group = entry.group;
     body.position.set(
       group.position.x + centre.x,
       group.position.y + centre.y,
@@ -356,7 +367,10 @@ export function createPropPhysics({ colliders, ground }) {
       // The footprint follows the body, so a prop that has tipped over is
       // blocked out where it lies rather than where it stood upright.
       syncFootprint(entry);
-      if (entry.time > MAX_TIME) {
+      // A prop is stopped where it lies once it is on the ground again, so
+      // that nothing is frozen in mid air. The hard limit is only there for a
+      // prop that never comes down at all.
+      if ((entry.time > MAX_TIME && touching) || entry.time > MAX_TIME + MAX_HANG) {
         rest(entry);
         continue;
       }

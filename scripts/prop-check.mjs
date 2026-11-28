@@ -36,11 +36,12 @@ function check(label, ok, detail = '') {
 }
 
 // A heap of rubbish on the pavement, with the physics engine around it.
-function place(build, x = 0, z = 0) {
+function place(build, x = 0, z = 0, extra = {}) {
   const colliders = new ColliderList();
   const props = createPropPhysics({ colliders, ground: () => 0 });
-  const { group, collider, body } = build({ x, z });
+  const { group, collider, body } = build({ x, z, ...extra });
   group.position.set(x, WALK_TOP, z);
+  if (extra.rot) group.rotation.y = extra.rot;
   group.updateMatrixWorld(true);
   colliders.push(collider);
   const entry = { group, collider, spec: body };
@@ -57,6 +58,11 @@ function settle(props, frames = 300) {
 // what has to stay on the ground is the prop itself.
 function lowest(group) {
   return new THREE.Box3().setFromObject(group).min.y;
+}
+
+// How upright the prop is: 1 is standing, 0 lying on its side.
+function upOf(group) {
+  return new THREE.Vector3(0, 1, 0).applyQuaternion(group.quaternion).y;
 }
 
 // How far the car and the prop overlap on the shallower axis. The car is
@@ -257,6 +263,57 @@ for (const [name, build] of [
   check('a shouldered skip is let go', !entry.flying);
   check('a shouldered skip goes back into the index',
     colliders.near(group.position.x, group.position.z, 1.5).includes(entry.collider));
+}
+
+// A prop that has been thrown and landed on its side keeps that pose when it
+// is hit again. Rebuilding the body from the angle it was built at would snap
+// a skip back upright the moment a second car touched it.
+{
+  const rot = Math.PI / 2;
+  const { props, group, entry } = place(buildDumpster, 0, 0, { rot });
+  // A hard hit off centre, so it goes over rather than sliding away.
+  const mover = { x: 0, z: -1.2, y: 0, heading: 0, length: 4.45, width: 1.85 };
+  props.knock(entry, 14, 0.2, mover, 1 / 60);
+  settle(props, 400);
+  const before = upOf(group);
+  check('the skip has tipped over', before < 0.9, `up ${before.toFixed(2)}`);
+  check('the skip came to rest', !entry.flying);
+
+  // A second car runs into it where it lies.
+  const mover2 = {
+    x: group.position.x,
+    z: group.position.z - 1.2,
+    y: 0,
+    heading: 0,
+    length: 4.45,
+    width: 1.85,
+  };
+  props.knock(entry, 0, 12, mover2, 1 / 60);
+  props.step(1 / 60);
+  const after = upOf(group);
+  check('a skip hit again keeps the pose it landed in',
+    Math.abs(after - before) < 0.15, `up ${before.toFixed(2)} -> ${after.toFixed(2)}`);
+}
+
+// A prop that is never let go of is still handed back eventually, so nothing
+// is left in the engine for ever.
+{
+  const { props, group, entry } = place(buildTrash, 0, 0);
+  props.knock(entry, 12, 0);
+  let frames = 0;
+  for (let i = 0; i < 12 * 60; i += 1) {
+    if (entry.body) {
+      // Pinned in the air: nothing the engine does can bring it down.
+      entry.body.position.y = WALK_TOP + 5;
+      entry.body.velocity.set(0, 0, 0);
+      entry.body.angularVelocity.set(0, 0, 0);
+    }
+    props.step(1 / 60);
+    frames += 1;
+    if (!entry.flying) break;
+  }
+  check('a prop that never lands is let go in the end', !entry.flying,
+    `after ${(frames / 60).toFixed(1)} s`);
 }
 
 // Everything goes back where it was.

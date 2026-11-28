@@ -19,6 +19,7 @@ import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
 import { createTerrain, surfaceAreas } from './terrain.js';
+import { buildFeatureMeshes, createLandform, flat, slope } from './landform.js';
 import { createVehicle } from './vehicle.js';
 
 const SIGNS = MAP.signs;
@@ -322,57 +323,144 @@ export function buildCity() {
     return MAP.hill;
   }
 
-  function groundHeight(x, z) {
+  // The hill, as pieces of ground.
+  //
+  // Each piece says how high the ground is at its four corners, and that same
+  // description draws the mesh. Before this, the height was a chain of ifs and
+  // the mesh was a set of hand-rotated boxes, and they had drifted apart: the
+  // east arm's deck was drawn as one straight slope while the ground under it
+  // stayed level for its first three metres, so the road and the ground a car
+  // stood on were nearly a metre apart.
+  //
+  // The pieces cover the hill without overlapping, so the order they are in
+  // does not matter: the way up, the top, the way down, and the two arms.
+  function hillFeatures() {
     const h = hillSpec();
-    if (!h) return 0;
-    const half = ROAD_W / 2 + WALK;
+    if (!h) return [];
     const { roadX, zLow, zHigh, rise, taper } = h;
+    const zTop = h.zTop;
     const zNorth = zHigh - ROAD_W;
-    if (Math.abs(x - roadX) <= half && z <= zLow && z >= zHigh) {
-      return rise * (zLow - z) / (zLow - zHigh);
+    const hw = ROAD_W / 2 + WALK;
+    const westReach = h.west ?? taper;
+    const out = [];
+
+    // The way up, from the level of the street to the top.
+    out.push(slope([
+      [roadX - hw, zLow, 0],
+      [roadX + hw, zLow, 0],
+      [roadX - hw, zHigh, rise],
+      [roadX + hw, zHigh, rise],
+    ], { material: 'hill', skirt: -0.1 }));
+
+    // The top, between the top of the climb and the start of the far side.
+    out.push(flat(
+      roadX - hw, zNorth,
+      roadX + hw, zHigh,
+      rise, { material: 'hill', skirt: -0.1 },
+    ));
+
+    // The way down on the far side.
+    out.push(slope([
+      [roadX - hw, zNorth - taper, 0],
+      [roadX + hw, zNorth - taper, 0],
+      [roadX - hw, zNorth, rise],
+      [roadX + hw, zNorth, rise],
+    ], { material: 'hill', skirt: -0.1 }));
+
+    // The two arms, which run out sideways from the top along the cross road.
+    // They are level along the road and fall away to nothing at their ends.
+    const armZ0 = zTop - ROAD_W / 2;
+    const armZ1 = zTop + ROAD_W / 2;
+    out.push(slope([
+      [roadX - hw, armZ0, rise],
+      [roadX - westReach, armZ0, 0],
+      [roadX - hw, armZ1, rise],
+      [roadX - westReach, armZ1, 0],
+    ], { material: 'hill', skirt: -0.1 }));
+    out.push(slope([
+      [roadX + hw, armZ0, rise],
+      [roadX + taper, armZ0, 0],
+      [roadX + hw, armZ1, rise],
+      [roadX + taper, armZ1, 0],
+    ], { material: 'hill', skirt: -0.1 }));
+
+    // The shelf the safehouse stands on. It is a piece of level ground set into
+    // the way up, at the height the road has reached by its door, so the house
+    // does not sit on a slope.
+    if (h.pad) {
+      const pad = h.pad;
+      if (pad.y === undefined) {
+        pad.y = rise * (zLow - pad.doorZ) / (zLow - zHigh);
+      }
+      out.push(flat(
+        pad.minX, pad.minZ,
+        pad.maxX, pad.maxZ,
+        pad.y, { material: 'pad' },
+      ));
     }
-    if (Math.abs(x - roadX) <= half && z <= zHigh && z >= zNorth) return rise;
-    if (Math.abs(x - roadX) <= half && z < zNorth && z >= zNorth - taper) {
-      return rise * (1 - (zNorth - z) / taper);
-    }
-    const limit = x < roadX ? (h.west ?? taper) : taper;
-    const dist = Math.abs(x - roadX);
-    if (Math.abs(z - h.zTop) <= ROAD_W / 2 && dist > half && dist <= limit) {
-      return rise * (1 - (dist - half) / (limit - half));
-    }
-    if (h.pad && x >= h.pad.minX && x <= h.pad.maxX && z >= h.pad.minZ && z <= h.pad.maxZ) {
-      return h.pad.y;
-    }
-    return 0;
+
+    return out;
   }
 
+  // The ground of the hill, as one thing that answers where it is high.
+  const hill = createLandform(hillFeatures());
+
+  // The height of the ground, everywhere. The hill is the only ground that is
+  // not level; everything else is the flat of the island.
+  function groundHeight(x, z) {
+    return hill.heightAt(x, z);
+  }
+
+  // Whether a point is on the hill, for the roads and walks that must not be
+  // laid across it.
   function hillCovers(x, z) {
-    const h = hillSpec();
-    if (!h) return false;
-    const half = ROAD_W / 2 + WALK + 0.6;
-    const { roadX, zLow, zHigh, taper } = h;
-    const zNorth = zHigh - ROAD_W;
-    const onApproach = Math.abs(x - roadX) <= half && z <= zLow + 0.5 && z >= zNorth - taper - 0.5;
-    const onArms = Math.abs(z - h.zTop) <= half && Math.abs(x - roadX) <= taper + 0.5;
-    return onApproach || onArms;
+    return hill.covers(x, z);
   }
 
-  function addRamp(x, zSouth, zNorth, width, ySouth, yNorth, mat) {
-    const run = zSouth - zNorth;
-    const rise = yNorth - ySouth;
-    const len = Math.hypot(run, rise);
-    const pitch = Math.atan2(rise, run);
-    const thickness = 0.32;
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, len), mat);
-    mesh.rotation.x = pitch;
-    mesh.position.set(x, (ySouth + yNorth) / 2 - (thickness / 2) * Math.cos(pitch), (zSouth + zNorth) / 2);
+  // A strip of surface that follows the ground under it. `heightAt` is asked
+  // along the strip and the strip is bent to it, so the surface a car drives on
+  // and the ground it stands on are the same shape by construction: there is no
+  // pitch worked out by hand for the mesh and a different one worked out for
+  // the physics.
+  //
+  // `lateral` is how far off the centre line each side of the strip sits, so a
+  // road and its two pavements can be laid as three strips and still follow the
+  // same slope.
+  function addRibbonOnGround(x, z0, z1, halfWidth, lift, mat, opts = {}) {
+    const steps = Math.max(2, Math.ceil(Math.abs(z1 - z0) / 2));
+    const positions = [];
+    const uvs = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const z = z0 + (z1 - z0) * t;
+      const y = groundHeight(x, z) + lift;
+      positions.push(
+        x - halfWidth, y, z,
+        x + halfWidth, y, z,
+      );
+      uvs.push(0, t * Math.abs(z1 - z0) / 4, 1, t * Math.abs(z1 - z0) / 4);
+    }
+    const indices = [];
+    for (let i = 0; i < steps; i += 1) {
+      const a = i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    // The underside is drawn too, so a strip bent over a crest does not show
+    // daylight through it from below.
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: opts.color ?? 0x3a3d42,
+      roughness: 0.96,
+      side: THREE.DoubleSide,
+    }));
+    mesh.material.map = mat?.map ?? null;
     mesh.receiveShadow = true;
     group.add(mesh);
-    const heading = 0;
-    for (let z = zNorth + 2.4; z < zSouth - 1.2; z += 5.2) {
-      const y = yNorth + (ySouth - yNorth) * ((z - zNorth) / run);
-      stripes.push({ x, z, sx: 0.16, sz: 1.6, rot: heading, y: y + 0.04 });
-    }
+    return mesh;
   }
 
   function addHill() {
@@ -382,13 +470,59 @@ export function buildCity() {
     const zNorth = zHigh - ROAD_W;
     const half = ROAD_W / 2;
     const walkOff = half + WALK / 2;
-    addRamp(roadX, zLow, zHigh, ROAD_W, ROAD_TOP, ROAD_TOP + rise, asphaltMat);
-    addRamp(roadX - walkOff, zLow, zHigh, WALK, WALK_TOP, WALK_TOP + rise, walkMat);
-    addRamp(roadX + walkOff, zLow, zHigh, WALK, WALK_TOP, WALK_TOP + rise, walkMat);
-    box(ROAD_W, 0.32, ROAD_W, asphaltMat, roadX, rise + ROAD_TOP - 0.16, h.zTop, { receive: true });
-    addRamp(roadX, zNorth, zNorth - taper, ROAD_W, ROAD_TOP + rise, ROAD_TOP, asphaltMat);
-    addRamp(roadX - walkOff, zNorth, zNorth - taper, WALK, WALK_TOP + rise, WALK_TOP, walkMat);
-    addRamp(roadX + walkOff, zNorth, zNorth - taper, WALK, WALK_TOP + rise, WALK_TOP, walkMat);
+    const walkHalf = WALK / 2;
+    const hw = half + WALK;
+
+    // The ground of the hill itself, once, from the same description the height
+    // comes from.
+    const ground = buildFeatureMeshes(hill.features, {
+      hill: new THREE.MeshStandardMaterial({ color: 0x3e3a34, roughness: 1, side: THREE.DoubleSide }),
+      pad: solid(0x3e3a34, 1),
+      ground: solid(0x3e3a34, 1),
+    });
+    group.add(ground);
+
+    // The road and its pavements up the hill, and down the far side.
+    addRibbonOnGround(roadX, zLow, zHigh, half, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
+    addRibbonOnGround(roadX, zNorth, zNorth - taper, half, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
+    for (const side of [-1, 1]) {
+      const wx = roadX + side * walkOff;
+      addRibbonOnGround(wx, zLow, zHigh, walkHalf, WALK_TOP, walkMat, { color: 0xa3988c });
+      addRibbonOnGround(wx, zNorth, zNorth - taper, walkHalf, WALK_TOP, walkMat, { color: 0xa3988c });
+    }
+    // The cross road over the top. It is level, and only as long as the top
+    // is: the arms beyond it fall away and are drawn by addArmOnGround, bent
+    // to the ground. Drawing the whole cross road level here was what made the
+    // road float above the falling ground of the arms.
+    box(hw * 2, 0.3, ROAD_W, asphaltMat, roadX, rise + ROAD_TOP - 0.15, h.zTop, { receive: true });
+    for (const side of [-1, 1]) {
+      const wz = h.zTop + side * walkOff;
+      box(hw * 2, 0.2, WALK, walkMat, roadX, rise + WALK_TOP - 0.1, wz, { receive: true });
+    }
+
+    // Lane markings up the climb, laid on the surface that was just bent.
+    const heading = 0;
+    for (let z = zHigh + 2.4; z < zLow - 1.2; z += 5.2) {
+      stripes.push({ x: roadX, z, sx: 0.16, sz: 1.6, rot: heading, y: groundHeight(roadX, z) + ROAD_TOP + 0.04 });
+    }
+    for (let z = zNorth - 2.4; z > zNorth - taper + 1.2; z -= 5.2) {
+      stripes.push({ x: roadX, z, sx: 0.16, sz: 1.6, rot: heading, y: groundHeight(roadX, z) + ROAD_TOP + 0.04 });
+    }
+
+    // The two arms, which run out sideways from the top along the cross road.
+    for (const side of [-1, 1]) {
+      const armReach = side < 0 ? (h.west ?? taper) : taper;
+      const x0 = roadX + side * half;
+      const x1 = roadX + side * armReach;
+      addArmOnGround(x0, x1, h.zTop, ROAD_W / 2, ROAD_TOP, asphaltMat, 0x3a3d42);
+      for (const s2 of [-1, 1]) {
+        addArmOnGround(
+          x0, x1,
+          h.zTop + s2 * walkOff, walkHalf, WALK_TOP, walkMat, 0xa3988c,
+        );
+      }
+    }
+
     // Sidewalks on the approach and on the far slope, so people walk the hill.
     for (const side of [-1, 1]) {
       const wx = roadX + side * walkOff;
@@ -397,33 +531,43 @@ export function buildCity() {
         { x0: wx, z0: zNorth, x1: wx, z1: zNorth - taper },
       );
     }
-    for (const side of [-1, 1]) {
-      const armReach = side < 0 ? (h.west ?? taper) : taper;
-      const x0 = roadX + side * half;
-      const x1 = roadX + side * armReach;
-      const len = Math.abs(x1 - x0);
-      const pitch = Math.atan2(rise, armReach - half);
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.32, ROAD_W), asphaltMat);
-      deck.rotation.z = -side * pitch;
-      deck.position.set((x0 + x1) / 2, rise / 2 + ROAD_TOP - 0.16 * Math.cos(pitch), h.zTop);
-      deck.receiveShadow = true;
-      group.add(deck);
-      const walk = new THREE.Mesh(new THREE.BoxGeometry(len, 0.2, WALK), walkMat);
-      walk.rotation.z = -side * pitch;
-      walk.position.set((x0 + x1) / 2, rise / 2 + WALK_TOP - 0.1, h.zTop + walkOff);
-      walk.receiveShadow = true;
-      group.add(walk);
-      const walk2 = walk.clone();
-      walk2.position.z = h.zTop - walkOff;
-      group.add(walk2);
-    }
-    if (h.pad) {
-      const pad = h.pad;
-      const w = pad.maxX - pad.minX;
-      const d = pad.maxZ - pad.minZ;
-      box(w, pad.y, d, solid(0x3e3a34, 1), (pad.minX + pad.maxX) / 2, pad.y / 2, (pad.minZ + pad.maxZ) / 2, { receive: true });
-    }
+
     roads.push({ x: roadX, z: (zLow + zNorth - taper) / 2, w: ROAD_W, d: zLow - (zNorth - taper) });
+  }
+
+  // A strip running along X, bent to the ground under it, for the arms of the
+  // cross road.
+  function addArmOnGround(x0, x1, z, halfWidth, lift, mat, color) {
+    const steps = Math.max(2, Math.ceil(Math.abs(x1 - x0) / 2));
+    const positions = [];
+    const uvs = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = x0 + (x1 - x0) * t;
+      const y = groundHeight(x, z) + lift;
+      positions.push(
+        x, y, z - halfWidth,
+        x, y, z + halfWidth,
+      );
+      const u = t * Math.abs(x1 - x0) / 4;
+      uvs.push(u, 0, u, 1);
+    }
+    const indices = [];
+    for (let i = 0; i < steps; i += 1) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color, roughness: 0.96, side: THREE.DoubleSide, map: mat?.map ?? null,
+    }));
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return mesh;
   }
 
   // A clockwise lane loop around one city block. All four sides are drivable

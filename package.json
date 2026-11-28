@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:single": "SINGLE_FILE=1 vite build",
     "preview": "vite preview",
-    "check": "node scripts/spatial-check.mjs && node scripts/ragdoll-check.mjs && node scripts/prop-check.mjs && node scripts/terrain-check.mjs"
+    "check": "node scripts/spatial-check.mjs && node scripts/ragdoll-check.mjs && node scripts/prop-check.mjs && node scripts/terrain-check.mjs && node scripts/landform-check.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

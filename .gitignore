@@ -29,3 +29,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Screenshots taken while checking something by hand.
+docs/tmp-*

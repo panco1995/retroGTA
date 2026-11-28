@@ -17,6 +17,7 @@ globalThis.document = {
 };
 
 const { createLandform, flat, ramp, slope } = await import('../src/landform.js');
+const { leanOn } = await import('../src/terrain.js');
 
 let failures = 0;
 function check(label, ok, detail = '') {
@@ -232,6 +233,39 @@ function check(label, ok, detail = '') {
       edges.size === 2, `${edges.size} distinct edges: ${[...edges].join(', ')}`);
   }
   void THREE;
+}
+
+// The cars the map parks on a slope have to be leaning on it from the start.
+//
+// They are placed before the ground is built, so they go down level. If
+// nothing lays them on the ground again, a car parked on the hill sits flat on
+// the slope until the first frame it is driven, and then snaps to the angle of
+// the hill the moment the player puts it in gear.
+{
+  const { buildCity } = await import('../src/city.js');
+  const city = buildCity();
+  const onSlope = city.vehicles
+    .map((v) => ({ v, s: city.terrain.surfaceAt(v.x, v.z) }))
+    .filter(({ s }) => s.ny < 0.995);
+
+  check('the map parks at least one car on a slope', onSlope.length > 0,
+    `${onSlope.length} of ${city.vehicles.length} cars`);
+
+  let worst = 0;
+  let at = null;
+  for (const { v, s } of onSlope) {
+    // The lean the ground asks for, in the car's own frame: the same call the
+    // game makes, so this compares like with like.
+    const want = leanOn({ x: s.nx, y: s.ny, z: s.nz }, v.heading);
+    const d = Math.abs(v.pitch - want.pitch);
+    if (d > worst) {
+      worst = d;
+      at = v;
+    }
+  }
+  check('a car parked on a slope is already leaning on it',
+    worst < 0.02,
+    `${(worst * 180 / Math.PI).toFixed(2)} deg off${at ? ` (car at ${at.x.toFixed(0)}, ${at.z.toFixed(0)}, heading ${(at.heading * 180 / Math.PI).toFixed(0)})` : ''}`);
 }
 
 console.log(failures === 0 ? 'OK' : `${failures} failures`);

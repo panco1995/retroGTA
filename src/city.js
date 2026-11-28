@@ -18,7 +18,7 @@ import { buildingHeight, createBuilding } from './building.js';
 import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
-import { createTerrain, surfaceAreas } from './terrain.js';
+import { createTerrain, settleOnGround, surfaceAreas } from './terrain.js';
 import { buildFeatureMeshes, createLandform, flat, ramp, slope } from './landform.js';
 import { createVehicle } from './vehicle.js';
 
@@ -1091,8 +1091,9 @@ export function buildCity() {
     vehicle.z = z;
     vehicle.heading = heading;
     // The terrain is not built yet while the map is being laid out, so a
-    // parked car is stood on the raw height here; the first frame it is asked
-    // about, the terrain takes over and leans it against the slope.
+    // parked car is only put at the right height here, level. Once the whole
+    // map is laid out, every car is laid on the ground again and leaned to the
+    // slope; see the settleOnGround pass after the terrain is built.
     vehicle.y = groundHeight(x, z);
     vehicle.groundRoll = 0;
     vehicle.pitch = 0;
@@ -1156,6 +1157,15 @@ export function buildCity() {
     height: groundHeight,
     kinds: [...surfaceAreas(MAP.surfaces), ...surfaces],
   });
+
+  // The cars were parked before the ground existed, so they were stood on a
+  // height with their bodies level. A car parked on the hill would then sit
+  // flat on a slope until the first frame it was driven, and snap to the angle
+  // of the hill the moment the player put it in gear. Now that the ground is
+  // built, every parked car is laid on it once, so it is already leaning on
+  // the slope before anyone gets in.
+  for (const vehicle of vehicles) settleOnGround(terrain, vehicle);
+  for (const vehicle of vehicles) vehicle.sync();
 
   return {
     group,

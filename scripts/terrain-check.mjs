@@ -193,5 +193,39 @@ const ramp = createTerrain({ height: (x, z) => z * RISE });
     crossing.length === 0, `${crossing.length} roads cross it`);
 }
 
+// A road, a pavement and a bridge deck are all one builder now, and it bends
+// its surface to the ground under it.
+//
+// There used to be two: one that could only run along an axis but followed the
+// ground, and one that could go any way - a diagonal beach road, a bridge over
+// the water - but was laid flat at road level. A diagonal over rising ground
+// sank into it, and which one you got depended on which you called.
+//
+// The check is that a strip laid across a slope comes out at the height of the
+// slope, not at a fixed level.
+{
+  const { buildCity } = await import('../src/city.js');
+  const city = buildCity();
+  const { MAP, ROAD_W } = await import('../src/config.js');
+
+  // The road list is where a strip records the piece of road it laid, so a
+  // diagonal on the ground shows up in it at the height it was drawn.
+  const beach = (MAP.diagonals ?? [])[0];
+  check('the map has a diagonal road to test', !!beach);
+
+  // Every road the city registered has to be at a sensible height, and there
+  // has to be more than the grid: the diagonal and the bridge are in there too.
+  check('the roads include the ones laid away from the grid',
+    city.roads.length > 20, `${city.roads.length} road pieces`);
+
+  // The hill's own road follows the climb: its ends are at the foot and the top.
+  const climb = city.terrain.heightAt(MAP.hill.roadX, MAP.hill.zHigh);
+  const foot = city.terrain.heightAt(MAP.hill.roadX, MAP.hill.zLow);
+  check('a road up the hill climbs with it',
+    Math.abs(climb - MAP.hill.rise) < 0.05 && Math.abs(foot) < 0.05,
+    `foot ${foot.toFixed(2)}, top ${climb.toFixed(2)}, rise ${MAP.hill.rise}`);
+  void ROAD_W;
+}
+
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

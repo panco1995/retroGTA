@@ -477,47 +477,158 @@ export function buildCity() {
   // close a street that people drive on.
   const SIDE_MIN_HEIGHT = 0.35;
 
-  // A strip of surface that follows the ground under it. `heightAt` is asked
-  // along the strip and the strip is bent to it, so the surface a car drives on
-  // and the ground it stands on are the same shape by construction: there is no
-  // pitch worked out by hand for the mesh and a different one worked out for
-  // the physics.
+  // A strip of surface laid along a line of points.
   //
-  // `lateral` is how far off the centre line each side of the strip sits, so a
-  // road and its two pavements can be laid as three strips and still follow the
-  // same slope.
-  function addRibbonOnGround(x, z0, z1, halfWidth, lift, mat, opts = {}) {
-    const steps = Math.max(2, Math.ceil(Math.abs(z1 - z0) / 2));
-    const positions = [];
-    const uvs = [];
-    for (let i = 0; i <= steps; i += 1) {
-      const t = i / steps;
-      const z = z0 + (z1 - z0) * t;
-      const y = groundHeight(x, z) + lift;
-      positions.push(
-        x - halfWidth, y, z,
-        x + halfWidth, y, z,
-      );
-      uvs.push(0, t * Math.abs(z1 - z0) / 4, 1, t * Math.abs(z1 - z0) / 4);
+  // It is the one builder for roads, pavements and bridges. The line can go
+  // any way - a street on the grid runs straight along an axis, a beach road
+  // wanders - and the surface is bent to the ground it crosses, so a road that
+  // climbs follows the hill instead of cutting through it.
+  //
+  // Both of those used to be two functions. One could only run along an axis
+  // but followed the ground; the other could go anywhere but was laid flat at
+  // road level, so a diagonal over rising ground sank into it.
+  //
+  //   points   [[x, z], ...] the centre line
+  //   width    how wide the surface is
+  //   lift     how far above the ground it sits: ROAD_TOP for a road, WALK_TOP
+  //            for a pavement
+  //   opts.walk   draw a pavement either side
+  //   opts.rails  draw parapets along the edges, for a bridge
+  //   opts.strips draw the dashed centre line
+  function addStrip(points, width, lift, mat, opts = {}) {
+    const half = width / 2;
+    // How far apart the cross sections are along the line. Close enough that a
+    // bend or a slope is followed rather than cut across.
+    const STEP = 2;
+    const quads = [];
+    const strip = { positions: [], uvs: [], indices: [], length: 0 };
+
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const [x0, z0] = points[i];
+      const [x1, z1] = points[i + 1];
+      const frame = segmentFrame(x0, z0, x1, z1);
+      const segLen = frame.len;
+      const steps = Math.max(1, Math.ceil(segLen / STEP));
+      const base = strip.positions.length / 3;
+
+      for (let k = 0; k <= steps; k += 1) {
+        const t = k / steps;
+        const cx = x0 + (x1 - x0) * t;
+        const cz = z0 + (z1 - z0) * t;
+        const y = groundHeight(cx, cz) + lift;
+        strip.positions.push(
+          cx + frame.px * half, y, cz + frame.pz * half,
+          cx - frame.px * half, y, cz - frame.pz * half,
+        );
+        const u = (strip.length + segLen * t) / 4;
+        strip.uvs.push(0, u, 1, u);
+        if (k < steps) {
+          const a = base + k * 2;
+          strip.indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+      strip.length += segLen;
+
+      // The four corners of this piece of surface, for a caller that needs the
+      // footprint: the walkable region, the road list.
+      quads.push([
+        [x0 + frame.px * half, z0 + frame.pz * half],
+        [x1 + frame.px * half, z1 + frame.pz * half],
+        [x1 - frame.px * half, z1 - frame.pz * half],
+        [x0 - frame.px * half, z0 - frame.pz * half],
+      ]);
+
+      if (opts.walk) {
+        const off = half + WALK / 2;
+        for (const side of [-1, 1]) {
+          addStripSide(
+            x0 + frame.px * off * side, z0 + frame.pz * off * side,
+            x1 + frame.px * off * side, z1 + frame.pz * off * side,
+            frame, WALK, WALK_TOP, walkMat, 0xa3988c,
+          );
+        }
+      }
+      if (opts.rails) {
+        const off = half - 0.45;
+        for (const side of [-1, 1]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.05, segLen), concrete);
+          // A parapet follows the ground too, or it floats where the bridge
+          // climbs.
+          const gy = groundHeight(frame.x, frame.z);
+          rail.position.set(
+            frame.x + frame.px * off * side,
+            gy + (opts.surface ?? lift) + 0.5,
+            frame.z + frame.pz * off * side,
+          );
+          rail.rotation.y = frame.heading;
+          rail.castShadow = true;
+          group.add(rail);
+        }
+      }
+      if (opts.strips !== false) {
+        for (let t = 2.2; t < segLen - 1.2; t += 5.2) {
+          const along = t - segLen / 2;
+          const sx = frame.x + Math.sin(frame.heading) * along;
+          const sz = frame.z + Math.cos(frame.heading) * along;
+          stripes.push({
+            x: sx,
+            z: sz,
+            sx: 0.16,
+            sz: 1.6,
+            rot: frame.heading,
+            y: groundHeight(sx, sz) + lift + 0.02,
+          });
+        }
+      }
     }
-    const indices = [];
-    for (let i = 0; i < steps; i += 1) {
-      const a = i * 2;
-      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-    }
+
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(indices);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(strip.positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(strip.uvs, 2));
+    geo.setIndex(strip.indices);
     geo.computeVertexNormals();
-    // The underside is drawn too, so a strip bent over a crest does not show
-    // daylight through it from below.
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: opts.color ?? 0x3a3d42,
       roughness: 0.96,
+      // Drawn from below as well, so a strip bent over a crest does not show
+      // daylight through it.
       side: THREE.DoubleSide,
+      map: mat?.map ?? null,
     }));
-    mesh.material.map = mat?.map ?? null;
+    mesh.receiveShadow = true;
+    mesh.castShadow = !!opts.cast;
+    group.add(mesh);
+    return quads;
+  }
+
+  // One side of a strip: a pavement, laid along the same line, on the ground
+  // under it rather than at the height of the road.
+  function addStripSide(x0, z0, x1, z1, frame, width, lift, mat, color) {
+    const steps = Math.max(1, Math.ceil(frame.len / 2));
+    const half = width / 2;
+    const positions = [];
+    const indices = [];
+    for (let k = 0; k <= steps; k += 1) {
+      const t = k / steps;
+      const cx = x0 + (x1 - x0) * t;
+      const cz = z0 + (z1 - z0) * t;
+      const y = groundHeight(cx, cz) + lift;
+      positions.push(
+        cx + frame.px * half, y, cz + frame.pz * half,
+        cx - frame.px * half, y, cz - frame.pz * half,
+      );
+      if (k < steps) {
+        const a = k * 2;
+        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color, roughness: 0.95, side: THREE.DoubleSide, map: mat?.map ?? null,
+    }));
     mesh.receiveShadow = true;
     group.add(mesh);
     return mesh;
@@ -553,17 +664,16 @@ export function buildCity() {
     addHillSides(h);
 
     // The road and its pavements up the hill, and down the far side.
-    addRibbonOnGround(roadX, zLow, zHigh, half, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
-    addRibbonOnGround(roadX, zNorth, zNorth - taper, half, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
+    addStrip([[roadX, zLow], [roadX, zHigh]], half * 2, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
+    addStrip([[roadX, zNorth], [roadX, zNorth - taper]], half * 2, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
     for (const side of [-1, 1]) {
       const wx = roadX + side * walkOff;
-      addRibbonOnGround(wx, zLow, zHigh, walkHalf, WALK_TOP, walkMat, { color: 0xa3988c });
-      addRibbonOnGround(wx, zNorth, zNorth - taper, walkHalf, WALK_TOP, walkMat, { color: 0xa3988c });
+      addStrip([[wx, zLow], [wx, zHigh]], walkHalf * 2, WALK_TOP, walkMat, { color: 0xa3988c, strips: false });
+      addStrip([[wx, zNorth], [wx, zNorth - taper]], walkHalf * 2, WALK_TOP, walkMat, { color: 0xa3988c, strips: false });
     }
     // The cross road over the top. It is level, and only as long as the top
-    // is: the arms beyond it fall away and are drawn by addArmOnGround, bent
-    // to the ground. Drawing the whole cross road level here was what made the
-    // road float above the falling ground of the arms.
+    // is: the arms beyond it fall away and are drawn as their own strips,
+    // bent to the ground.
     box(hw * 2, 0.3, ROAD_W, asphaltMat, roadX, rise + ROAD_TOP - 0.15, h.zTop, { receive: true });
     for (const side of [-1, 1]) {
       const wz = h.zTop + side * walkOff;
@@ -584,11 +694,11 @@ export function buildCity() {
       const armReach = side < 0 ? (h.west ?? taper) : taper;
       const x0 = roadX + side * half;
       const x1 = roadX + side * armReach;
-      addArmOnGround(x0, x1, h.zTop, ROAD_W / 2, ROAD_TOP, asphaltMat, 0x3a3d42);
+      addStrip([[x0, h.zTop], [x1, h.zTop]], ROAD_W, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });
       for (const s2 of [-1, 1]) {
-        addArmOnGround(
-          x0, x1,
-          h.zTop + s2 * walkOff, walkHalf, WALK_TOP, walkMat, 0xa3988c,
+        addStrip(
+          [[x0, h.zTop + s2 * walkOff], [x1, h.zTop + s2 * walkOff]],
+          WALK, WALK_TOP, walkMat, { color: 0xa3988c, strips: false },
         );
       }
     }
@@ -606,39 +716,6 @@ export function buildCity() {
   }
 
   // A strip running along X, bent to the ground under it, for the arms of the
-  // cross road.
-  function addArmOnGround(x0, x1, z, halfWidth, lift, mat, color) {
-    const steps = Math.max(2, Math.ceil(Math.abs(x1 - x0) / 2));
-    const positions = [];
-    const uvs = [];
-    for (let i = 0; i <= steps; i += 1) {
-      const t = i / steps;
-      const x = x0 + (x1 - x0) * t;
-      const y = groundHeight(x, z) + lift;
-      positions.push(
-        x, y, z - halfWidth,
-        x, y, z + halfWidth,
-      );
-      const u = t * Math.abs(x1 - x0) / 4;
-      uvs.push(u, 0, u, 1);
-    }
-    const indices = [];
-    for (let i = 0; i < steps; i += 1) {
-      const a = i * 2;
-      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-      color, roughness: 0.96, side: THREE.DoubleSide, map: mat?.map ?? null,
-    }));
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    return mesh;
-  }
 
   // A clockwise lane loop around one city block. All four sides are drivable
   // road spans, and the loops of neighbouring blocks give two-way traffic.
@@ -863,71 +940,6 @@ export function buildCity() {
     };
   }
 
-  function addRibbon(points, width, opts = {}) {
-    const thickness = opts.thickness ?? ROAD_TOP;
-    const surface = opts.surface ?? ROAD_TOP;
-    const mat = opts.mat ?? asphaltMat;
-    const quads = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const [x0, z0] = points[i];
-      const [x1, z1] = points[i + 1];
-      const frame = segmentFrame(x0, z0, x1, z1);
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, thickness, frame.len), mat);
-      mesh.position.set(frame.x, surface - thickness / 2, frame.z);
-      mesh.rotation.y = frame.heading;
-      mesh.receiveShadow = true;
-      mesh.castShadow = !!opts.cast;
-      group.add(mesh);
-      roads.push({ x: frame.x, z: frame.z, w: width, d: frame.len, rot: frame.heading });
-      if (opts.walk) {
-        const off = width / 2 + WALK / 2;
-        for (const side of [-1, 1]) {
-          const walkMesh = new THREE.Mesh(new THREE.BoxGeometry(WALK, WALK_TOP, frame.len), walkMat);
-          walkMesh.position.set(
-            frame.x + frame.px * off * side,
-            WALK_TOP / 2,
-            frame.z + frame.pz * off * side,
-          );
-          walkMesh.rotation.y = frame.heading;
-          walkMesh.receiveShadow = true;
-          group.add(walkMesh);
-        }
-      }
-      if (opts.rails) {
-        const off = width / 2 - 0.45;
-        for (const side of [-1, 1]) {
-          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.05, frame.len), concrete);
-          rail.position.set(
-            frame.x + frame.px * off * side,
-            surface + 0.5,
-            frame.z + frame.pz * off * side,
-          );
-          rail.rotation.y = frame.heading;
-          rail.castShadow = true;
-          group.add(rail);
-        }
-      }
-      for (let t = 2.2; t < frame.len - 1.2; t += 5.2) {
-        const along = t - frame.len / 2;
-        stripes.push({
-          x: frame.x + Math.sin(frame.heading) * along,
-          z: frame.z + Math.cos(frame.heading) * along,
-          sx: 0.16,
-          sz: 1.6,
-          rot: frame.heading,
-          y: surface + 0.02,
-        });
-      }
-      const half = width / 2;
-      quads.push([
-        [x0 + frame.px * half, z0 + frame.pz * half],
-        [x1 + frame.px * half, z1 + frame.pz * half],
-        [x1 - frame.px * half, z1 - frame.pz * half],
-        [x0 - frame.px * half, z0 - frame.pz * half],
-      ]);
-    }
-    return quads;
-  }
 
   function addShape(points, y, color) {
     const shape = new THREE.Shape();
@@ -983,7 +995,9 @@ export function buildCity() {
 
   function addBridge() {
     const spec = MAP.bridge;
-    const deck = addRibbon(spec.points, spec.width, { rails: true, surface: ROAD_TOP + 0.02 });
+    const deck = addStrip(spec.points, spec.width, ROAD_TOP + 0.02, asphaltMat, {
+      rails: true, surface: ROAD_TOP + 0.02,
+    });
     for (let i = 1; i < spec.points.length - 1; i++) {
       const [x, z] = spec.points[i];
       const prev = spec.points[i - 1];
@@ -1040,7 +1054,7 @@ export function buildCity() {
   }
   addHill();
   for (const road of MAP.diagonals ?? []) {
-    addRibbon(road.points, road.width ?? ROAD_W, { walk: true });
+    addStrip(road.points, road.width ?? ROAD_W, ROAD_TOP, asphaltMat, { walk: true });
   }
   if (MAP.bridge) deck.push(...addBridge());
   commitStripes();

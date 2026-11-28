@@ -7,6 +7,7 @@ import { createVehicle, VEHICLE_COLORS, VEHICLE_TYPES } from './vehicle.js';
 import { onLangChange, t } from './i18n.js';
 import { codesFor, keyVars, onBindingsChange } from './bindings.js';
 import { onPageChange } from './menu.js';
+import { isTouch } from './touch.js';
 
 const EXTERIOR_FOV = 45;
 // The same vertical field of view the game uses for the driver's seat.
@@ -194,6 +195,14 @@ let targetY = 1;
 let dragging = false;
 let dragX = 0;
 let dragY = 0;
+// Every finger on the turntable, and the gap between the two of them when a
+// pinch started. A mouse is one pointer, so the wheel stays the desktop zoom.
+const pointers = new Map();
+let pinchStart = 0;
+function pinchGap() {
+  const [a, b] = [...pointers.values()];
+  return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+}
 // Free look from the driver's seat, in the car's own axes.
 let lookYaw = 0;
 let lookPitch = -0.1;
@@ -429,10 +438,15 @@ function setDriver(on) {
 }
 
 // The hint names whichever key opens the interior, so a remapped interact
-// binding stays accurate.
+// binding stays accurate. A phone has no wheel or arrow keys, so it gets the
+// gestures it can actually make.
 function updateHint() {
   if (!hintEl) return;
   const key = keyVars().interact;
+  if (isTouch) {
+    hintEl.textContent = t(interiorAvailable() ? 'collectionHintTouchInterior' : 'collectionHintTouch');
+    return;
+  }
   hintEl.textContent = t(interiorAvailable() ? 'collectionHintInterior' : 'collectionHint', { key });
 }
 
@@ -589,12 +603,33 @@ export function initCollection() {
   document.getElementById('collection-next').addEventListener('click', () => select(index + 1));
 
   canvasEl.addEventListener('pointerdown', (event) => {
+    if (pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    // The browser may already have dropped the pointer; a throw here would
+    // lose the drag it was starting.
+    try {
+      canvasEl.setPointerCapture?.(event.pointerId);
+    } catch {
+      // The events still arrive without the capture.
+    }
+    if (pointers.size === 2) pinchStart = pinchGap();
     dragging = true;
     dragX = event.clientX;
     dragY = event.clientY;
-    canvasEl.setPointerCapture(event.pointerId);
   });
   canvasEl.addEventListener('pointermove', (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    // Two fingers zoom the turntable the way the wheel does, so the whole
+    // gallery works on a phone.
+    if (pointers.size === 2 && pinchStart > 0) {
+      if (interior) return;
+      const gap = pinchGap();
+      dist = THREE.MathUtils.clamp(dist * (pinchStart / gap), baseDist * 0.45, baseDist * 2.4);
+      pinchStart = gap;
+      updateCamera();
+      return;
+    }
     if (!dragging) return;
     const dx = event.clientX - dragX;
     const dy = event.clientY - dragY;
@@ -609,9 +644,11 @@ export function initCollection() {
     }
   });
   const endDrag = (event) => {
+    pointers.delete(event.pointerId);
+    if (pointers.size < 2) pinchStart = 0;
     if (!dragging) return;
     dragging = false;
-    if (canvasEl.hasPointerCapture(event.pointerId)) canvasEl.releasePointerCapture(event.pointerId);
+    if (canvasEl.hasPointerCapture?.(event.pointerId)) canvasEl.releasePointerCapture(event.pointerId);
   };
   canvasEl.addEventListener('pointerup', endDrag);
   canvasEl.addEventListener('pointercancel', endDrag);

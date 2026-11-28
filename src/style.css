@@ -13,12 +13,43 @@ html, body {
   overflow: hidden;
   background: #8b97a1;
   font-family: "Avenir Next Condensed", "Arial Narrow", "PingFang SC", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
+
+body {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The buttons of the pad are drawn by the game; nothing on the page should
+   offer the iOS callout menu when one is held. */
+.touch button,
+.touch .touch-btn {
+  -webkit-touch-callout: none;
+}
+
+/* A keyboard-only or touch-only control. The pad settings are pointless with
+   a mouse, and rebinding keys is pointless without one. */
+.touch-only { display: none; }
+
+html.touch .kbd-only { display: none; }
+html.touch .touch-only { display: revert; }
 
 canvas#c {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
+}
+
+/* Full-bleed on a phone: the game draws into the notch as well, and the HUD
+   and the pad keep clear of it with the safe-area insets below. */
+html, body, #c { height: 100%; }
+
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
 }
 
 #hud {
@@ -199,6 +230,15 @@ body.rebinding #map {
   box-shadow: 0 0 12px rgba(240, 212, 138, 0.25);
 }
 
+.settings-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+}
+
 .controls-reset {
   margin-top: 14px;
   border: 1px solid rgba(240, 212, 138, 0.35);
@@ -265,6 +305,10 @@ body.rebinding #map {
 }
 
 #prompt.status .prompt-key { display: none; }
+
+/* A touch prompt has no key to name, so the cap goes and the verb stands
+   alone. */
+#prompt.nokey .prompt-key { display: none; }
 
 .prompt-key {
   display: grid;
@@ -998,4 +1042,362 @@ body.rebinding #map {
     flex-basis: 100%;
     text-align: center;
   }
+}
+
+/* ---- Touch controls ---------------------------------------------------- */
+
+/* One unit of the pad: the diameter of a main button. Everything else is a
+   multiple of it, so the whole corner scales with the screen. It lives on the
+   root so the HUD, which is a separate layer, can keep clear of it too. */
+html.touch {
+  --edge: max(18px, env(safe-area-inset-left));
+  --edge-b: max(16px, env(safe-area-inset-bottom));
+  --edge-r: max(18px, env(safe-area-inset-right));
+  --u: clamp(54px, 13vh, 70px);
+  /* How wide the pad is at each side, for the HUD to pad around. */
+  --pad-left: calc(var(--u) * 2.1 + var(--edge) + 8px);
+  --pad-right: calc(var(--u) * 2.2 + var(--edge-r) + 8px);
+  --pad-bottom: calc(var(--u) * 3.4 + var(--edge-b));
+}
+
+/* The pad sits over the canvas but under the HUD and every menu, so a paused
+   game or an open map takes the whole screen back. */
+#touch {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+
+#touch.hidden { display: none; }
+
+/* Everything that is not the stick or a button is the look area. It has to be
+   a real element with pointer-events, or the canvas would take the drag. */
+#touch-look {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* The stick is about two buttons across: the same thumb-reach as the cluster
+   on the other side, and it scales with the same unit. */
+.touch-stick {
+  position: absolute;
+  left: var(--edge);
+  bottom: var(--edge-b);
+  width: calc(var(--u) * 2.1);
+  height: calc(var(--u) * 2.1);
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(240, 212, 138, 0.34);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(10, 14, 14, 0.34), rgba(8, 11, 11, 0.2));
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.32), 0 6px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-stick.active {
+  border-color: rgba(240, 212, 138, 0.7);
+  background: radial-gradient(circle, rgba(28, 24, 14, 0.4), rgba(8, 11, 11, 0.26));
+}
+
+.touch-stick-knob {
+  width: 46%;
+  height: 46%;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 212, 138, 0.6);
+  background: radial-gradient(circle at 42% 34%, rgba(255, 240, 200, 0.72), rgba(146, 118, 62, 0.6));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.42);
+  transition: transform 0.06s linear;
+  pointer-events: none;
+}
+
+.touch-stick.active .touch-stick-knob { transition: none; }
+
+/* The buttons are laid out in a grid whose cells are one button across, so
+   nothing can overlap however the screen is sized: a small row for the two
+   view keys, a row of the two main actions, and the attack key on its own
+   under the thumb. */
+.touch-buttons {
+  position: absolute;
+  right: var(--edge-r);
+  bottom: var(--edge-b);
+  display: grid;
+  grid-template-columns: var(--u) var(--u);
+  grid-template-rows: calc(var(--u) * 0.84) var(--u) calc(var(--u) * 1.14);
+  gap: calc(var(--u) * 0.2);
+  place-items: center;
+  place-content: end;
+  pointer-events: none;
+}
+
+/* A round button with the same glass look as the keycaps in the HUD. */
+.touch-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--u);
+  height: var(--u);
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(30, 34, 36, 0.5), rgba(8, 10, 11, 0.66));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: rgba(243, 239, 228, 0.9);
+  font: inherit;
+  font-size: clamp(10px, 1.6vh, 13px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  text-align: center;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  transition: background 0.08s ease, border-color 0.08s ease, transform 0.08s ease;
+}
+
+.touch-btn.small {
+  width: calc(var(--u) * 0.8);
+  height: calc(var(--u) * 0.8);
+  font-size: clamp(9px, 1.3vh, 11px);
+  opacity: 0.86;
+}
+
+.touch-btn.pressed {
+  color: #fff8e2;
+  border-color: rgba(240, 212, 138, 0.9);
+  background: linear-gradient(180deg, rgba(96, 78, 34, 0.78), rgba(40, 32, 12, 0.82));
+  transform: scale(0.95);
+}
+
+.touch-buttons [data-action="map"] { grid-area: 1 / 1; }
+.touch-buttons [data-action="camera"] { grid-area: 1 / 2; }
+.touch-buttons [data-action="interact"] { grid-area: 2 / 1; }
+.touch-buttons [data-action="brake"] { grid-area: 2 / 2; }
+
+.touch-buttons [data-action="attack"] {
+  grid-area: 3 / 2;
+  width: calc(var(--u) * 1.14);
+  height: calc(var(--u) * 1.14);
+}
+
+.touch-pause {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: var(--edge-r);
+  width: 44px;
+  height: 44px;
+  font-size: 13px;
+  letter-spacing: 0;
+  pointer-events: auto;
+}
+
+/* With the pad switched off in the settings, only the look area and the pause
+   key stay, so the screen is clear. */
+body.pad-off .touch-stick,
+body.pad-off .touch-buttons { display: none; }
+
+/* Keep the HUD off the notch and clear of the pad. */
+html.touch #place-wrap { top: max(14px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); }
+html.touch #speed {
+  top: max(16px, env(safe-area-inset-top));
+  /* Clear of the pause key in the top right corner. */
+  right: calc(max(16px, env(safe-area-inset-right)) + 56px);
+}
+html.touch #place { font-size: 20px; }
+html.touch #sub { font-size: 11px; }
+
+/* The radar moves to the top left, under the place name: the two bottom
+   corners belong to the thumbs. */
+html.touch #map {
+  left: max(14px, env(safe-area-inset-left));
+  top: calc(max(14px, env(safe-area-inset-top)) + 44px);
+  bottom: auto;
+  width: 104px;
+  height: 104px;
+  opacity: 0.9;
+}
+
+/* The hint sits in the gap between the two thumbs, so its padding is the width
+   of the stick on the left and of the button cluster on the right: it can
+   never end up under a finger. */
+html.touch #hint {
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 4px);
+  padding-left: var(--pad-left);
+  padding-right: var(--pad-right);
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+}
+
+html.touch #prompt {
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 30px);
+  padding-left: var(--pad-left);
+  padding-right: var(--pad-right);
+}
+
+html.touch #toast {
+  bottom: auto;
+  top: calc(max(14px, env(safe-area-inset-top)) + 46px);
+  font-size: 11px;
+}
+
+/* ---- Rotate prompt ---------------------------------------------------- */
+
+#rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 42%, #141b1c, #050707 72%);
+  color: var(--ink);
+}
+
+#rotate.hidden { display: none; }
+
+/* Only a phone held the wrong way round sees this. */
+@media (orientation: landscape) {
+  #rotate { display: none !important; }
+}
+
+.rotate-phone {
+  width: 46px;
+  height: 78px;
+  border: 2px solid var(--amber);
+  border-radius: 9px;
+  box-shadow: 0 0 22px rgba(240, 212, 138, 0.28);
+  animation: rotateHint 2.4s ease-in-out infinite;
+}
+
+@keyframes rotateHint {
+  0%, 30% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(90deg); }
+}
+
+.rotate-title {
+  color: var(--amber);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.rotate-copy {
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+}
+
+/* A landscape phone is about 390px tall, so the full map is measured against
+   the viewport height rather than a fixed allowance. */
+@media (pointer: coarse) {
+  .pause-map-panel { padding: 12px; gap: 8px; }
+  .pause-map-frame { padding: 5px; }
+  #pause-map-canvas { max-height: calc(100dvh - 120px); }
+  .pause-map-heading { font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone { animation: none; transform: rotate(90deg); }
+}
+
+/* ---- Touch layout for the menus --------------------------------------- */
+
+@media (pointer: coarse) {
+  .menu-card { width: min(520px, 92vw); }
+
+  .menu-list { gap: 6px; margin-top: 16px; }
+
+  .menu-list button {
+    font-size: 17px;
+    letter-spacing: 0.16em;
+    padding: 9px 14px;
+  }
+
+  /* A landscape phone is short: the logo shrinks and the card hugs the
+     middle so a long page still fits. */
+  #menu { padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom)); }
+  .menu-brand .boot-title { font-size: clamp(24px, 6vh, 44px); }
+  .menu-brand .boot-title::after { margin-top: 8px; }
+  .menu-brand .menu-author { margin-top: 8px; font-size: 11px; }
+
+  .menu-sub .menu-card { padding: 18px 20px 16px; }
+
+  .settings-label { font-size: 12px; margin-bottom: 8px; }
+  .settings-heading { margin-top: 14px; }
+
+  .option-group button,
+  .control-row button,
+  .controls-reset,
+  .menu-back {
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+
+  .control-row { margin: 0; }
+  .control-row span { font-size: 14px; }
+  .control-row button { min-width: 78px; }
+
+  /* Bigger hit targets for the collection tabs and close button. */
+  .collection-tabs button,
+  .collection-close,
+  .collection-view { font-size: 12px; padding: 6px 12px; }
+
+  .collection-title { font-size: 12px; }
+  .collection-name { font-size: 16px; }
+}
+
+/* A landscape phone held sideways is only about 375px tall, which is not
+   enough for a column of seven or eight menu buttons. Two columns fit it
+   without scrolling, and the thumb reaches either one. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
+  .menu-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 12px;
+  }
+
+  #menu-home { width: min(520px, 88vw); }
+
+  .menu-list button {
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+  }
+
+  /* The logo and the card have to share 375px, so the brand gives up most of
+     its height. */
+  .menu-brand .boot-title { font-size: 26px; letter-spacing: 0.18em; }
+  .menu-brand .boot-title::after { margin-top: 5px; height: 1px; }
+  .menu-brand .menu-author { margin-top: 5px; font-size: 10px; }
+
+  /* The settings page is three groups and a footer in the same short card, so
+     it is tightened until it fits without scrolling. */
+  .menu-sub .menu-card { padding: 10px 16px 10px; }
+  .menu-sub .menu-card > .boot-title { font-size: 18px; letter-spacing: 0.2em; margin: 0 0 4px; }
+  .menu-sub .menu-card > .menu-back { margin-top: 8px; padding: 6px 12px; }
+  .settings-label { font-size: 10px; letter-spacing: 0.16em; margin-bottom: 4px; }
+  .settings-heading { margin-top: 8px; }
+  .option-group { gap: 5px; }
+  .option-group button { font-size: 12px; padding: 4px 10px; }
+  .settings-note { margin-top: 8px; font-size: 10px; }
+  .control-row span { font-size: 12px; }
+  .control-row button { font-size: 12px; padding: 3px 10px; min-width: 68px; }
+  .controls-reset { margin-top: 8px; font-size: 12px; padding: 5px 12px; }
+}
+
+/* A phone held upright is only for the menu: the rotate prompt covers the
+   game, and the menus are squeezed so the buttons stay reachable. */
+@media (orientation: portrait) and (max-height: 560px) {
+  #menu,
+  #pause { padding: 8px 12px; }
 }

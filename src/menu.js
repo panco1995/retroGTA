@@ -10,10 +10,12 @@ const PAGES = {
 };
 
 // Pages inside the shared settings panel. Language and view are picked
-// directly on the settings page; only the key bindings drill down.
+// directly on the settings page; the key bindings and the virtual pad drill
+// down.
 const SETTINGS_PAGES = {
   settings: 'settings-home',
   controls: 'settings-controls-page',
+  touch: 'settings-touch-page',
 };
 
 const listeners = new Set();
@@ -86,7 +88,7 @@ export function currentPage() {
 // Steps one level up inside the menus. Returns false when already at the
 // menu home, so the caller can close the menu itself.
 export function backPage() {
-  if (current.page === 'controls') {
+  if (current.page === 'controls' || current.page === 'touch') {
     showPage(current.menu, 'settings');
     return true;
   }

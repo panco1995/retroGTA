@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#06090a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>retroGTA</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23c4b49a'/></svg>" />
     <link rel="stylesheet" href="/src/style.css" />
@@ -23,6 +27,26 @@
         <span id="prompt-label" class="prompt-label"></span>
       </div>
       <div id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Shown while a touch device in game is held portrait. -->
+    <div id="rotate" class="hidden">
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <div class="rotate-title" data-i18n="rotateTitle"></div>
+      <div class="rotate-copy" data-i18n="rotateCopy"></div>
+      <button type="button" id="rotate-go" class="controls-reset" data-i18n="rotateGo"></button>
+    </div>
+
+    <!-- Virtual controls. Only mounted on touch devices, and only while
+         playing; the layout is landscape, the stick on the left thumb and the
+         buttons under the right. -->
+    <div id="touch" class="hidden">
+      <div id="touch-look"></div>
+      <div id="touch-stick" class="touch-stick">
+        <div id="touch-stick-knob" class="touch-stick-knob"></div>
+      </div>
+      <div id="touch-buttons" class="touch-buttons"></div>
+      <button type="button" id="touch-pause" class="touch-btn small touch-pause" data-i18n-aria="pauseTitle">II</button>
     </div>
 
     <div id="menu">
@@ -67,13 +91,19 @@
             <div id="view-options" class="option-group" role="group"></div>
             <div class="settings-label settings-heading" data-i18n="controls"></div>
             <div class="option-group">
-              <button type="button" data-page="controls" data-i18n="controlsKeyboard"></button>
+              <button type="button" data-page="controls" data-i18n="controlsKeyboard" class="kbd-only"></button>
+              <button type="button" data-page="touch" data-i18n="controlsTouch" class="touch-only"></button>
             </div>
           </section>
           <section id="settings-controls-page" class="settings-page" hidden>
             <div class="settings-label" data-i18n="controlsKeyboard"></div>
             <div id="controls"></div>
             <button type="button" id="controls-reset" class="controls-reset" data-i18n="controlsReset"></button>
+          </section>
+          <section id="settings-touch-page" class="settings-page" hidden>
+            <div class="settings-label" data-i18n="touchPad"></div>
+            <div class="option-group" id="touch-pad-options" role="group"></div>
+            <p class="settings-note" data-i18n="touchNote"></p>
           </section>
         </section>
         <button type="button" id="menu-back" class="menu-back" data-page="back" data-i18n="menuBack" hidden></button>
@@ -152,10 +182,12 @@
       import { initMenu } from '/src/menu.js';
       import { initBindings } from '/src/bindings.js';
       import { initCollection } from '/src/collection.js';
+      import { initTouch } from '/src/touch.js';
       initI18n();
       initMenu();
       initBindings();
       initCollection();
+      initTouch();
     </script>
     <script type="module" src="/src/main.js"></script>
   </body>

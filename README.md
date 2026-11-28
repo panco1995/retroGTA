@@ -74,9 +74,20 @@ Keys are rebindable in **Settings → Controls → Keyboard**: click an action, 
 
 The radar shows the area around the player, rotating with heading, and widens with speed. The arrow is the player, the cyan dot the safehouse, white dots are parked cars; moving traffic and pedestrians are not shown. The pause map shows the whole island, north up.
 
+### On a phone
+
+Open the site on a phone and tap **Start**; the page goes fullscreen and asks for landscape. A device that will not turn shows a prompt until it is rotated, and the game holds still behind it. The pad is laid out for two thumbs:
+
+- **Left stick** — walk, and push it all the way to run. Driving reads the same stick, and it is analogue, so a shallow push is a gentle turn.
+- **Drag anywhere else** — look around, in the same views where the mouse would.
+- **Attack**, **jump / brake** and **get in / out** sit under the right thumb; the two smaller keys above them cycle the camera and open the map.
+- **II** in the top right corner pauses.
+
+**Settings → Controls → Touch → Virtual pad → Hidden** hides the stick and the buttons for a clean screen; the look drag and the pause key stay. The setting is remembered.
+
 ## Collection
 
-A full-screen gallery from the main menu or the pause menu, in four tabs: **Vehicles** (all 12), **People** (all 12 kinds), **Street props** (lamp, hydrant, rubbish bags, tree, skip) and **Buildings** (eight types). Each sits on a turntable: drag to rotate, scroll to zoom, arrow keys to step through.
+A full-screen gallery from the main menu or the pause menu, in four tabs: **Vehicles** (all 12), **People** (all 12 kinds), **Street props** (lamp, hydrant, rubbish bags, tree, skip) and **Buildings** (eight types). Each sits on a turntable: drag to rotate, scroll (or pinch on a phone) to zoom, arrow keys to step through.
 
 Vehicles also offer an **Interior view** that puts the camera in the driver's seat with the windshield hidden. Cars with a driver have a **Driver NPC** toggle.
 

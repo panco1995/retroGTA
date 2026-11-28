@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { WALK_TOP } from './config.js';
 import { brickTexture } from './materials.js';
 import { createInput } from './input.js';
+import { createTouchPad, isTouch, onTouchPadChange, requestLandscape, touchPadVisible } from './touch.js';
 import {
   blocked,
   circleExitsFromObb,
@@ -64,8 +65,12 @@ const ATTACK_RANGE = 1.9;
 const CAR_SPAN = 3.2;
 
 export function createGame(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  // A phone has a fraction of a desktop's fill rate, so the backing store is
+  // capped lower there, and the shadow map is half the size: at arm's length
+  // on a small screen the softer shadow is hard to tell from the sharp one.
+  const pixelCap = isTouch ? 1.35 : 1.75;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, pixelCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -86,7 +91,7 @@ export function createGame(canvas) {
   sun.position.set(48, 72, 36);
   sun.target.position.set(10, 0, -8);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
   sun.shadow.camera.left = -48;
   sun.shadow.camera.right = 48;
   sun.shadow.camera.top = 48;
@@ -171,7 +176,6 @@ export function createGame(canvas) {
   const pedHome = peds.map((ped) => ({ x: ped.x, z: ped.z, heading: ped.heading }));
   const input = createInput(canvas);
   const minimap = createMinimap(document.getElementById('map'), world);
-
   let started = false;
   let paused = false;
   let suppressEsc = false;
@@ -185,10 +189,45 @@ export function createGame(canvas) {
   let hintTime = 0;
   let yaw = Math.PI;
   let pitch = 0.32;
+
+  // Touch devices get a stick and buttons instead of a keyboard and mouse. The
+  // look drag is the same as the mouse: it feeds the same yaw and pitch.
+  const touchPad = isTouch
+    ? createTouchPad({
+        input,
+        onLook: (dx, dy) => lookBy(dx, dy),
+        onPause: () => openPause(),
+      })
+    : null;
+  const rotateEl = isTouch ? document.getElementById('rotate') : null;
   const scratch = [];
   // The rectangle a prop is being thrown out of the way of. It is one object
   // so the throw does not allocate on every contact.
   const _mover = { x: 0, z: 0, y: 0, heading: 0, length: 0, width: 0, vehicle: null };
+
+  // The camera follows the finger the same way it follows the mouse: a drag
+  // to the right turns the view right. The ranges match the pointer lock
+  // handler below, so both inputs feel the same.
+  function lookBy(dx, dy) {
+    if (!started || paused || !LOOK_VIEWS.has(view)) return;
+    yaw -= dx;
+    pitch += dy;
+    pitch = THREE.MathUtils.clamp(pitch, view === 'first' ? -1.2 : -0.15, 1.05);
+  }
+
+  // A phone held upright cannot run the game: the pad would cover the whole
+  // screen. The prompt covers the game until it is turned; with fullscreen the
+  // page can also lock the orientation itself.
+  const standing = window.matchMedia('(orientation: portrait)');
+  let portraitBlocked = false;
+  function syncOrientation() {
+    if (!rotateEl) return;
+    portraitBlocked = started && !paused && standing.matches;
+    rotateEl.classList.toggle('hidden', !portraitBlocked);
+    if (!touchPad) return;
+    if (portraitBlocked || paused || !started) touchPad.hide();
+    else touchPad.show();
+  }
 
   // Where the car that threw a prop is now, given the prop. The game owns the
   // cars, so it is the one that knows. A prop with no car any more returns
@@ -574,6 +613,9 @@ export function createGame(canvas) {
     suppressEsc = true;
     document.exitPointerLock();
     pauseEl.classList.remove('hidden');
+    // The menu takes the screen back: the pad goes, and the rotate prompt has
+    // nothing to hide because the game is not running anyway.
+    syncOrientation();
     input.release();
     setTimeout(() => {
       suppressEsc = false;
@@ -586,7 +628,11 @@ export function createGame(canvas) {
     mapFromGame = false;
     pauseEl.classList.add('hidden');
     input.release();
-    if (LOOK_VIEWS.has(view)) input.lock();
+    if (touchPad) {
+      syncOrientation();
+    } else if (LOOK_VIEWS.has(view)) {
+      input.lock();
+    }
   }
 
   function closeMap() {
@@ -1334,23 +1380,28 @@ export function createGame(canvas) {
   }
 
   function updateWalk(dt, time) {
-    let ix = 0;
-    let iz = 0;
     const face = moveYaw();
     const fx = Math.sin(face);
     const fz = Math.cos(face);
     const rx = -Math.cos(face);
     const rz = Math.sin(face);
-    if (input.w) { ix += fx; iz += fz; }
-    if (input.s) { ix -= fx; iz -= fz; }
-    if (input.d) { ix += rx; iz += rz; }
-    if (input.a) { ix -= rx; iz -= rz; }
-    const len = Math.hypot(ix, iz);
+    // Both sources are read in the camera's frame: forward is the stick's up
+    // and W, right is its right and D. A key is a steady walk, a full push of
+    // the stick is a run, and a half push walks at the pace of the thumb.
+    const stickMag = Math.min(1, Math.hypot(input.stickX, input.stickY));
+    const forward = input.keysY + input.stickY;
+    const right = input.keysX + input.stickX;
+    const len = Math.hypot(forward, right);
     let speed = 0;
-    if (len > 0.001) {
-      ix /= len;
-      iz /= len;
-      speed = input.run ? 6.8 : 3.35;
+    let ix = 0;
+    let iz = 0;
+    if (len > 0.05) {
+      ix = (fx * forward + rx * right) / len;
+      iz = (fz * forward + rz * right) / len;
+      if (input.keysX !== 0 || input.keysY !== 0) speed = input.run ? 6.8 : 3.35;
+      if (stickMag > 0.02) {
+        speed = Math.max(speed, 3.35 + (6.8 - 3.35) * Math.pow(stickMag, 1.6));
+      }
       const target = Math.atan2(ix, iz);
       let delta = target - player.heading;
       while (delta > Math.PI) delta -= Math.PI * 2;
@@ -1451,9 +1502,11 @@ export function createGame(canvas) {
   }
 
   function updateDrive(dt) {
-    const throttle = (input.w ? 1 : 0) - (input.s ? 1 : 0);
+    // Both inputs are continuous now: a thumb on the stick can feather the
+    // throttle or hold a shallow turn, while a key is still the full push.
+    const throttle = input.throttle;
     // heading 0 points the nose toward +Z, so a right turn must decrease heading.
-    const steerInput = (input.a ? 1 : 0) - (input.d ? 1 : 0);
+    const steerInput = input.steer;
     hero.braking = input.brake && Math.abs(hero.speed) > 0.2;
     const accel = throttle > 0 ? 9.5 : 7.5;
     hero.speed += throttle * accel * dt;
@@ -1466,12 +1519,13 @@ export function createGame(canvas) {
     const grip = ground.grip;
     // 1 on a road, so the numbers below are the ones the game was tuned on.
     const surf = ground.drag;
-    const drag = (throttle === 0 ? 2.1 : 0.35) * surf;
+    const coasting = Math.abs(throttle) < 0.05;
+    const drag = (coasting ? 2.1 : 0.35) * surf;
     hero.speed -= Math.sign(hero.speed) * drag * dt;
     // The extra bite of a loose surface, taken out in proportion to speed.
     const slow = (surf - 1) * 0.16;
     if (slow > 0) hero.speed -= hero.speed * slow * dt;
-    if (throttle === 0 && !hero.braking && Math.abs(hero.speed) < 0.18) hero.speed = 0;
+    if (coasting && !hero.braking && Math.abs(hero.speed) < 0.18) hero.speed = 0;
     hero.speed = THREE.MathUtils.clamp(hero.speed, -5.5, 16);
 
     const rolling = Math.abs(hero.speed) > 0.25;
@@ -1817,6 +1871,8 @@ export function createGame(canvas) {
     setText(promptKeyEl, key);
     setText(promptLabelEl, label);
     promptEl.classList.toggle('status', status);
+    // Touch has no key to show, so the cap is dropped instead of left empty.
+    promptEl.classList.toggle('nokey', key === '');
     promptEl.classList.add('show');
   }
 
@@ -1841,22 +1897,32 @@ export function createGame(canvas) {
     const keys = keyVars();
     hintEl.classList.toggle('fade', hintTime <= 0);
     setToast(flash ? flash.text : '');
+    touchPad?.setMode(mode);
+
+    // With the pad hidden the player is on a phone with no keys to name, so
+    // the hint stays out of the way instead of describing buttons that are not
+    // on the screen.
+    const pad = touchPad && touchPadVisible();
 
     if (mode === 'drive') {
       setText(speedEl, `${Math.round(hero.speed * 3.6)} km/h`);
-      setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
+      if (touchPad) setText(hintEl, pad ? t('hintTouchDrive') : '');
+      else setText(hintEl, t('hintDrive', { ...keys, view: viewLabel() }));
       const canExit = Math.abs(hero.speed) < 2.5;
-      setPrompt(canExit, keys.interact, t('exitCar'));
+      setPrompt(canExit, touchPad ? '' : keys.interact, t('exitCar'));
       return;
     }
 
     setText(speedEl, t('onFoot'));
-    setText(
-      hintEl,
-      LOOK_VIEWS.has(view)
-        ? t('hintFollow', keys)
-        : t('hintFixed', { ...keys, view: viewLabel() }),
-    );
+    if (touchPad) setText(hintEl, pad ? t('hintTouch') : '');
+    else {
+      setText(
+        hintEl,
+        LOOK_VIEWS.has(view)
+          ? t('hintFollow', keys)
+          : t('hintFixed', { ...keys, view: viewLabel() }),
+      );
+    }
 
     if (player.airborne) {
       setPrompt(false);
@@ -1870,7 +1936,7 @@ export function createGame(canvas) {
 
     const near = findEnterableVehicle(player.x, player.z, PROMPT_RANGE);
     if (near) {
-      setPrompt(true, keys.interact, near.traffic ? t('stealCar') : t('enterCar'));
+      setPrompt(true, touchPad ? '' : keys.interact, near.traffic ? t('stealCar') : t('enterCar'));
     } else {
       setPrompt(false);
     }
@@ -1880,6 +1946,7 @@ export function createGame(canvas) {
   onLangChange(fillCheatVehicles);
   onLangChange(syncViewOptions);
   onBindingsChange(updateHud);
+  onTouchPadChange(updateHud);
   fillCheatVehicles();
   mountViewOptions();
 
@@ -1910,6 +1977,7 @@ export function createGame(canvas) {
   });
 
   canvas.addEventListener('click', () => {
+    if (isTouch) return;
     if (started && !paused && LOOK_VIEWS.has(view)) input.lock();
   });
 
@@ -1922,7 +1990,14 @@ export function createGame(canvas) {
     yaw = player.heading;
     pitch = 0.3;
     input.release();
-    if (LOOK_VIEWS.has(view)) input.lock();
+    // A phone only lets the page lock its orientation from a user gesture,
+    // and this is one: the game starts in landscape, full screen.
+    if (isTouch) {
+      requestLandscape();
+      syncOrientation();
+    } else if (LOOK_VIEWS.has(view)) {
+      input.lock();
+    }
   });
 
   document.getElementById('pause-resume').addEventListener('click', () => closePause());
@@ -1936,6 +2011,8 @@ export function createGame(canvas) {
     started = false;
     pauseEl.classList.add('hidden');
     hudEl.classList.add('hidden');
+    touchPad?.hide();
+    rotateEl?.classList.add('hidden');
     menuEl.classList.remove('hidden');
     openMainMenu();
     document.exitPointerLock();
@@ -1964,7 +2041,11 @@ export function createGame(canvas) {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     drawPauseMap();
+    syncOrientation();
   });
+
+  standing.addEventListener?.('change', syncOrientation);
+  document.addEventListener('fullscreenchange', syncOrientation);
 
   for (const vehicle of world.vehicles) vehicle.updateVisual(0);
 
@@ -1979,6 +2060,14 @@ export function createGame(canvas) {
     if (started && input.consume('map')) toggleMap();
 
     if (paused) {
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+      return;
+    }
+
+    // A phone held upright covers the game with the rotate prompt; the world
+    // holds still behind it instead of running on unseen.
+    if (portraitBlocked) {
       renderer.render(scene, camera);
       requestAnimationFrame(frame);
       return;

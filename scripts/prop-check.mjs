@@ -24,7 +24,7 @@ globalThis.document = {
 
 const THREE = await import('three');
 const { WALK_TOP } = await import('../src/config.js');
-const { buildDumpster, buildHydrant, buildTrash } = await import('../src/props.js');
+const { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } = await import('../src/props.js');
 const { createPropPhysics } = await import('../src/prop-physics.js');
 const { vehicleBlocked, vehicleBlockedBy } = await import('../src/collision.js');
 const { ColliderList } = await import('../src/spatial.js');
@@ -329,6 +329,90 @@ for (const [name, build] of [
   check('the heap is in the index again', colliders.near(0, 0, 1).includes(collider));
   check('the heap is a circle again after a reset', collider.circle === true);
 }
+
+// A lamp post is bolted to the ground. It does not fly: it goes over about its
+// foot, it stays down, and the road it lands on is blocked afterwards.
+{
+  const landings = [];
+  const colliders = new ColliderList();
+  const props = createPropPhysics({
+    colliders,
+    ground: () => 0,
+    onLand: (entry) => landings.push(entry),
+  });
+  const built = buildLamp({ x: 0, z: 0 });
+  built.group.position.set(0, WALK_TOP, 0);
+  built.group.updateMatrixWorld(true);
+  colliders.push(built.collider);
+  const entry = {
+    group: built.group,
+    collider: built.collider,
+    spec: built.body,
+    light: built.light,
+    mesh: built.mesh,
+  };
+  props.register(entry);
+
+  // Its foot stays put while it goes over.
+  props.knock(entry, 0, 10);
+  const footX = built.group.position.x;
+  const footZ = built.group.position.z;
+  let halfway = 0;
+  for (let i = 0; i < 120; i += 1) {
+    props.step(1 / 60);
+    const up = upOf(built.group);
+    if (!halfway && up < 0.8 && up > 0.2) halfway = up;
+  }
+  check('the post goes over', Math.abs(upOf(built.group)) < 0.1,
+    `up ${upOf(built.group).toFixed(2)}`);
+  check('the post turns over rather than snapping flat',
+    halfway > 0.2 && halfway < 0.8, `was ${halfway.toFixed(2)} upright halfway`);
+  check('the post stays on its foot',
+    Math.abs(built.group.position.x - footX) < 0.01
+    && Math.abs(built.group.position.z - footZ) < 0.01,
+    `foot ${built.group.position.x.toFixed(2)},${built.group.position.z.toFixed(2)}`);
+  check('a fallen post is still a lamp', !!built.light && !!built.mesh);
+  check('landing is announced so the lamp can start sparking', landings.length === 1);
+  check('the post stays down', entry.down === true);
+
+  // It lies across four and a half metres of the road, and that is blocked.
+  const c = built.collider;
+  const reach = Math.max(c.maxX - c.minX, c.maxZ - c.minZ);
+  check('the fallen post blocks the length of itself', reach > 4,
+    `${reach.toFixed(2)} m`);
+  check('the fallen post is in the index',
+    colliders.near(c.x, c.z, 3).includes(c));
+
+  // It does not get up and go over again.
+  check('a post that is already down is not knocked again',
+    props.knock(entry, 0, 10) === null);
+  check('it is still down', Math.abs(upOf(built.group)) < 0.1);
+
+  // Everything goes back, and the post stands up again.
+  props.reset();
+  check('the post stands up again', upOf(built.group) > 0.99);
+  check('the post blocks a car at its foot again',
+    built.collider.circle === true && built.collider.radius < 0.2);
+}
+
+// A tree is taller than a car and cannot be knocked over: a car is stopped by
+// it, and the tree does not move.
+{
+  const built = buildTree({ x: 0, z: 0 });
+  built.group.position.set(0, WALK_TOP, 0);
+  built.group.updateMatrixWorld(true);
+  const height = new THREE.Box3().setFromObject(built.group).getSize(new THREE.Vector3()).y;
+  check('the tree stands well over a car', height > 4.5, `${height.toFixed(2)} m`);
+  check('the tree has nothing to throw', !built.body);
+
+  const colliders = new ColliderList();
+  colliders.push(built.collider);
+  check('the tree stops a car',
+    vehicleBlocked(0, 0, 0, 4.45, 1.85, colliders, null));
+  const props = createPropPhysics({ colliders, ground: () => 0 });
+  const treeEntry = { group: built.group, collider: built.collider, spec: built.body };
+  props.register(treeEntry);
+  check('nothing can throw a tree', props.knock(treeEntry, 0, 10) === null);}
 
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

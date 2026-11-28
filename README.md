@@ -75,7 +75,7 @@ The main menu and the pause menu both have a Collection page. It is a full-scree
 
 - **Vehicles** — all 14 vehicle types, in the same paint as the cheat menu
 - **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
-- **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster
+- **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster. A car throws the bags and the hydrant, shoves the skip, and knocks the lamp post over; the post falls about its foot, lands across the road, and sparks from its live cable until the scene is reset. A tree is older than the street: it is taller than a car and does not come down
 - **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, a hospital, a police station, and the safehouse, all from the city's shared building builder
 
 Pick from the list, or use the left and right arrow keys, to step through the items in the current tab. The model sits on a turntable: drag to rotate it and scroll to zoom.
@@ -184,13 +184,14 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/ragdoll.js` | The ragdoll: a knocked down person hands every joint to a physics engine, the joints are held together by constraints, and the pose it lands in is kept for the get up |
 | `src/physics.js` | The shared part of the physics engine: the world setup, and the walls built around a body while it falls |
-| `src/prop-physics.js` | Street furniture a car throws out of the way: the rubbish bags, the hydrant and the skip are handed to a physics engine and settle where they land. The collider travels with the prop and is the box around its body, so a skip that lands on its side blocks the road it actually covers. A prop on the move stays in the collision index, and a car that catches up with one shoves it instead of driving through it; the car itself goes into the engine as well, so a prop cannot tumble back through the bonnet |
+| `src/prop-physics.js` | Street furniture a car throws out of the way: the rubbish bags, the hydrant and the skip are handed to a physics engine and settle where they land. The collider travels with the prop and is the box around its body, so a skip that lands on its side blocks the road it actually covers. A prop on the move stays in the collision index, and a car that catches up with one shoves it instead of driving through it; the car itself goes into the engine as well, so a prop cannot tumble back through the bonnet. A lamp post is bolted at the foot, so it does not fly: it goes over about its base and stays down |
+| `src/shocks.js` | The sparks off a lamp post that has been knocked down: a burst when it lands, and a fitful flicker and more sparks for as long as it lies there |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
 | `src/spatial.js` | Spatial index for the colliders: the static ones are bucketed into a grid and queried by cell, the ones that move (cars) are kept on a short list that is always tested |
-| `src/props.js` | Street furniture: lamp posts, hydrants, rubbish bags, trees and skips. The city and the collection gallery share one model for each, and the collider is written next to the geometry |
+| `src/props.js` | Street furniture: lamp posts, hydrants, rubbish bags, trees and skips. The city and the collection gallery share one model for each, and the collider is written next to the geometry. A prop that a car can throw also says what it weighs and how it is thrown, in the same function |
 | `src/blood.js` | Blood left on the ground after a knockdown or a fatal hit |
 | `src/materials.js` | Brick and sign textures drawn on a canvas |
 | `src/i18n.js` | English and Chinese interface strings |

@@ -23,6 +23,7 @@ import { keyVars, onBindingsChange } from './bindings.js';
 import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseHome } from './menu.js';
 import { VEHICLE_COLORS, VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
+import { createShocks } from './shocks.js';
 
 const VIEW_ORDER = ['follow', 'first', 'top', 'iso'];
 const VIEW_LABELS = {
@@ -98,8 +99,16 @@ export function createGame(canvas) {
   const world = buildCity();
   scene.add(world.group);
 
-  // The street furniture a car can throw out of the way.
-  const props = createPropPhysics({ colliders: world.colliders, ground: world.ground });
+  // The street furniture a car can throw out of the way. A post that has been
+  // knocked down is still live, so the sparks start when it comes to rest.
+  const shocks = createShocks(scene);
+  const props = createPropPhysics({
+    colliders: world.colliders,
+    ground: world.ground,
+    onLand: (entry) => {
+      if (entry.spec.headAt && entry.light && entry.mesh) shocks.add(entry);
+    },
+  });
   for (const entry of world.knockables) props.register(entry);
 
   const spawn = world.spawn;
@@ -536,6 +545,7 @@ export function createGame(canvas) {
     traffic.reset();
     world.reset();
     props.reset();
+    shocks.reset();
     hintTime = 12;
     input.release();
   }
@@ -1979,6 +1989,9 @@ export function createGame(canvas) {
     // The car that threw each one is carried along with it, so the prop cannot
     // turn back through a body the engine does not have.
     props.step(dt, propCar);
+    // The sparks off a fallen lamp post. They fade where they land, so this
+    // runs every frame whether or not anything is down.
+    shocks.update(dt);
     separatePeople();
     blood.update(dt);
     updateHud();
@@ -2006,6 +2019,11 @@ export function createGame(canvas) {
         get mode() { return mode; },
         get started() { return started; },
         get paused() { return paused; },
+        // Knock a street prop over the way a car does, for driving the
+        // physics from the console while working on it.
+        knockProp(prop, vx = 0, vz = 10) {
+          return props.knock(prop, vx, vz, null, 1 / 60);
+        },
       }
     : null;
 }

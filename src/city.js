@@ -286,10 +286,22 @@ export function buildCity() {
     const len = Math.hypot(dx, dz) || 1;
     // The arm leans over the road, so the post turns to face it.
     const rot = Math.atan2(-dz / len, dx / len);
-    const { group: lamp, collider } = buildLamp({ x, z, rot });
+    const { group: lamp, collider, body, light, mesh } = buildLamp({ x, z, rot });
     lamp.position.y = WALK_TOP + groundHeight(x, z);
     group.add(lamp);
     colliders.push(collider);
+    // A post is bolted down: it does not fly, it falls over, and the live
+    // cable in it sparks once it is down. The lamp head is carried with the
+    // prop so the sparks come out of the end that is on the ground.
+    if (body) {
+      knockables.push({
+        group: lamp,
+        collider,
+        spec: body,
+        light,
+        mesh,
+      });
+    }
   }
 
   function hillSpec() {

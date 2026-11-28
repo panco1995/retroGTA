@@ -56,13 +56,20 @@ const UPRIGHT = 0.92;
 // How tall the car that threw a prop is, for the body it leaves in the
 // engine. The prop has to land on the bonnet, not sink through it.
 const CAR_HEIGHT = 1.5;
+// How fast a post goes over, in radians per second. A four and a half metre
+// post takes about a second and a bit to come down, which is what a real one
+// does, and it is slow enough to read as a fall rather than a flick.
+const TO_TOPPLE_RATE = 1.55;
 
-export function createPropPhysics({ colliders, ground }) {
+export function createPropPhysics({ colliders, ground, onLand = null }) {
   const world = createWorld();
   // Every prop that can be knocked out of the way.
   const all = new Set();
   // The ones that are on the move right now.
   const flying = new Set();
+  // The posts that are on their way over, which are turning about a foot and
+  // are not in the engine at all.
+  const toppling = new Set();
 
   // A prop on the pavement that a car can throw out of the way.
   function register(entry) {
@@ -86,6 +93,7 @@ export function createPropPhysics({ colliders, ground }) {
     entry.flying = false;
     entry.body = null;
     entry.walls = null;
+    entry.down = false;
     all.add(entry);
   }
 
@@ -106,10 +114,20 @@ export function createPropPhysics({ colliders, ground }) {
   // or null when the car has to stop against the prop instead.
   function knock(entry, vx, vz, mover = null, dt = 0) {
     if (!entry) return null;
-    if (entry.flying) return shove(entry, vx, vz, mover, dt);
     const spec = entry.spec;
+    // A prop with no body is part of the scenery: a tree is older than the
+    // street and does not come down.
+    if (!spec) return null;
+    if (entry.topplingAnim) return null;
+    // A post can only go over once. A second car that runs into one that is
+    // already down is stopped by it rather than standing it up and felling it
+    // again, which would turn it through the pavement.
+    if (entry.down) return null;
+    if (entry.flying) return shove(entry, vx, vz, mover, dt);
     const speed = Math.hypot(vx, vz);
     if (speed < 0.5) return null;
+    // A post bolted at the foot does not fly: it goes over about its base.
+    if (spec.topple) return topple(entry, vx, vz);
     const dirX = vx / speed;
     const dirZ = vz / speed;
 
@@ -170,9 +188,14 @@ export function createPropPhysics({ colliders, ground }) {
       dirZ * launch - dirX * aside,
     );
     // The prop tumbles about the axis across the direction it is travelling,
-    // so it rolls the way it was hit instead of flailing.
-    const spin = Math.min(9, speed * 0.7);
-    body.angularVelocity.set(-dirZ * spin, (Math.random() - 0.5) * 0.8, dirX * spin);
+    // so it rolls the way it was hit instead of flailing. A post is bolted at
+    // the foot: it turns over slowly rather than spinning away.
+    const spin = Math.min(spec.maxSpin ?? 9, speed * (spec.spin ?? 0.7));
+    body.angularVelocity.set(
+      -dirZ * spin,
+      (Math.random() - 0.5) * (spec.twist ?? 0.8),
+      dirX * spin,
+    );
     body.wakeUp();
 
     entry.body = body;
@@ -204,9 +227,79 @@ export function createPropPhysics({ colliders, ground }) {
     return 1 - spec.drag;
   }
 
-  // A car has caught up with a prop that is already on the move. The prop is
-  // put back out of the car and sent on at the car's speed, so the car never
-  // ends up inside it.
+  // A prop that is bolted down does not fly: it leans over and falls. The
+  // fall is played out as a turn about the foot, because a four and a half
+  // metre post handed to the engine as a free body pole vaults over the car
+  // that hit it and comes down somewhere else entirely.
+  //
+  // The foot is left where it is, the post turns until it lies flat, and then
+  // it is handed to the rest of the machinery as if it had landed: the
+  // footprint is the box around the fallen post, so the road it now covers is
+  // the road that is blocked.
+  function topple(entry, vx, vz) {
+    if (entry.topplingAnim) return null;
+    const speed = Math.hypot(vx, vz);
+    const spec = entry.spec;
+    const dirX = vx / speed;
+    const dirZ = vz / speed;
+    const group = entry.group;
+    // The post falls away from the car that hit it. A post that fell the other
+    // way would come down across the bonnet of the car stopped against it,
+    // which is a pole through the windscreen rather than a broken street lamp.
+    entry.topplingAnim = {
+      // The axis it turns about, lying on the ground across the push.
+      axisX: dirZ,
+      axisZ: -dirX,
+      angle: 0,
+      // How fast it goes over. A post is long and it takes its time.
+      rate: TO_TOPPLE_RATE * (0.7 + Math.min(1, speed / 12) * 0.6),
+      pivotX: group.position.x,
+      pivotY: group.position.y,
+      pivotZ: group.position.z,
+      // The way the post was facing, so its arm keeps its bearing as it falls.
+      heading: group.rotation.y,
+    };
+    // The post stays in the index while it goes over, still at its foot. The
+    // car that hit it has to be stopped by it: the post is bolted down, and a
+    // car that carried on would drive under the falling pole and be clipped by
+    // it. Once the post is down, its footprint becomes the stretch of road it
+    // covers.
+    entry.flying = true;
+    toppling.add(entry);
+    return null;
+  }
+
+  // Turns the post a little further over. Returns true while it is still going.
+  function stepTopple(entry, dt) {
+    const t = entry.topplingAnim;
+    t.angle = Math.min(Math.PI / 2, t.angle + t.rate * dt);
+    const group = entry.group;
+    // The post turns about its foot, and the group sits at the foot, so the
+    // whole of it is a turn in world space. The post's own heading is kept, so
+    // the arm over the road keeps the bearing it was built with and ends up
+    // lying where the lamp was.
+    _axis.set(t.axisX, 0, t.axisZ).normalize();
+    _toppleQuat.setFromAxisAngle(_axis, t.angle);
+    _yawQuat.setFromAxisAngle(_up, t.heading);
+    group.quaternion.copy(_toppleQuat).multiply(_yawQuat);
+    group.position.set(t.pivotX, t.pivotY, t.pivotZ);
+    group.updateMatrixWorld(true);
+    if (t.angle < Math.PI / 2) return true;
+    // It is down. The collider becomes the box around it, at the stretch of
+    // road it now covers, and goes back into the grid.
+    syncFootprintAsBox(entry);
+    colliders.restore(entry.collider);
+    entry.topplingAnim = null;
+    entry.flying = false;
+    // It stays down: a post does not get up again.
+    entry.down = true;
+    if (onLand) onLand(entry);
+    return false;
+  }
+
+  // A prop that has been thrown and is already on its way back out of the
+  // engine: it is put back in front of the bumper and sent along, and it
+  // stays on the moving list until it rests.
   function shove(entry, vx, vz, mover, dt) {
     const speed = Math.hypot(vx, vz);
     if (!mover || speed < 0.35) return null;
@@ -271,6 +364,22 @@ export function createPropPhysics({ colliders, ground }) {
     }
   }
 
+  // The footprint of a prop that is lying where it fell: the box around the
+  // mesh on screen. A post on the ground covers four and a half metres of the
+  // pavement, and a car has to be stopped by all of it.
+  function syncFootprintAsBox(entry) {
+    const meshBox = _box.setFromObject(entry.group);
+    const c = entry.collider;
+    delete c.circle;
+    delete c.obb;
+    c.minX = meshBox.min.x;
+    c.maxX = meshBox.max.x;
+    c.minZ = meshBox.min.z;
+    c.maxZ = meshBox.max.z;
+    c.x = (c.minX + c.maxX) / 2;
+    c.z = (c.minZ + c.maxZ) / 2;
+  }
+
   // The footprint of a prop that is off its feet, or still in the air: the box
   // around the body it actually has. A skip lands on its side and reaches a
   // metre down the road, which its own upright box does not say.
@@ -297,7 +406,7 @@ export function createPropPhysics({ colliders, ground }) {
   function settleFootprint(entry) {
     const body = entry.body;
     syncFootprint(entry);
-    const up = _up.set(0, 1, 0).applyQuaternion(
+    const up = _worldUp.set(0, 1, 0).applyQuaternion(
       _quat.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
     );
     if (up.y < UPRIGHT) return;
@@ -349,6 +458,11 @@ export function createPropPhysics({ colliders, ground }) {
   }
 
   function step(dt, cars = null) {
+    // A post that is going over is turned a little more each frame. It is not
+    // in the engine at all: it is a turn about its own foot.
+    for (const entry of toppling) {
+      if (!stepTopple(entry, dt)) toppling.delete(entry);
+    }
     if (flying.size === 0) return;
     // The cars in the engine are moved to wherever the game put them, so the
     // engine's answer is about the car as it is on screen now.
@@ -401,6 +515,9 @@ export function createPropPhysics({ colliders, ground }) {
     entry.mover = null;
     entry.walls = null;
     colliders.restore(entry.collider);
+    // Whoever is listening gets the prop where it lies, so a fallen post can
+    // start sparking and a knocked prop can make whatever noise it makes.
+    if (onLand) onLand(entry);
   }
 
   // Everything goes back where it was.
@@ -416,7 +533,14 @@ export function createPropPhysics({ colliders, ground }) {
       entry.mover = null;
       entry.walls = null;
     }
+    // A post that is halfway over is stood back up with the rest.
+    for (const entry of [...toppling]) {
+      entry.topplingAnim = null;
+      entry.flying = false;
+      toppling.delete(entry);
+    }
     for (const entry of all) {
+      entry.down = false;
       const group = entry.group;
       group.position.set(entry.start.x, entry.start.y, entry.start.z);
       group.rotation.set(0, entry.start.heading, 0);
@@ -426,6 +550,8 @@ export function createPropPhysics({ colliders, ground }) {
       delete c.maxX;
       delete c.minZ;
       delete c.maxZ;
+      delete c.circle;
+      delete c.obb;
       const authored = entry.authored;
       if (authored.circle) {
         c.circle = true;
@@ -579,4 +705,11 @@ function shapeTurn(rot) {
 const _quat = new THREE.Quaternion();
 const _offset = new THREE.Vector3();
 const _euler = new THREE.Euler();
-const _up = new THREE.Vector3();
+// The world up, never written to: it is an axis to turn about, not a scratch
+// vector.
+const _up = new THREE.Vector3(0, 1, 0);
+const _worldUp = new THREE.Vector3();
+const _axis = new THREE.Vector3();
+const _toppleQuat = new THREE.Quaternion();
+const _yawQuat = new THREE.Quaternion();
+const _box = new THREE.Box3();

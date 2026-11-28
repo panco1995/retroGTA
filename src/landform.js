@@ -20,6 +20,110 @@
 
 import * as THREE from 'three';
 
+// A piece of ground that climbs from one end to the other, with its ends
+// rounded off.
+//
+// A straight slope meets the flat ground beside it at a crease: the height is
+// continuous, but the gradient jumps from nothing to the whole slope in one
+// step, so a car going over it pitches all at once and the seam reads as a
+// hard fold in the road.
+//
+// A ramp is the same climb with the gradient eased at both ends, so it starts
+// at nothing and comes back to nothing instead of jumping. The middle stays as
+// steep as a straight slope would be: the easing is spent over a fixed length
+// at each end, not over the whole climb, so `ease` is how much of the run is
+// rounded off and the rest is straight.
+//
+// The easy way to do this is to ease the whole climb, but that makes the
+// middle half again as steep as it was - a 15% hill becomes a 23% one - which
+// is the opposite of what a gentler hill wants. Rounding only the ends keeps
+// the grade it was built with.
+//
+// `axis` is the direction the ramp climbs along: 'z' for one that runs north
+// to south, 'x' for one that runs across. The width is across the climb, and
+// the ramp is level across it.
+export function ramp({
+  axis = 'z',
+  from, to,          // the ends of the climb, along `axis`
+  cross0, cross1,    // how far the ramp reaches either side of the climb
+  y0, y1,            // the height at each end
+  ease = 6,          // how far the ends are rounded off, along the climb
+  opts = {},
+}) {
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+  const run = to - from;
+  const len = Math.abs(run);
+  const rise = y1 - y0;
+  const dir = Math.sign(run) || 1;
+  const c0 = Math.min(cross0, cross1);
+  const c1 = Math.max(cross0, cross1);
+  // Never round off more than half the climb from either end, or the two
+  // rounds would meet and the profile would have no straight left.
+  const e = Math.max(0, Math.min(ease, len / 2));
+  // The grade of the straight part, worked out so that the whole climb still
+  // covers exactly `rise`: each round gives up half an ease worth of rise
+  // against a straight slope, so the straight has to make up the difference.
+  const straightRun = len - e;
+  const grade = straightRun > 1e-6 ? rise / straightRun : 0;
+
+  // The height a distance `s` along the climb from `from`, in metres.
+  function heightAlong(s) {
+    if (e <= 0) return y0 + grade * s;
+    const k = grade / (2 * e);
+    if (s <= e) {
+      // The bottom round: the gradient goes from 0 to `grade` over `e`, so the
+      // height is a quadratic whose slope starts at nothing.
+      return y0 + k * s * s;
+    }
+    if (s >= len - e) {
+      // The top round, mirrored: the gradient comes back to nothing over `e`.
+      const back = len - s;
+      return y1 - k * back * back;
+    }
+    // The straight part. It starts where the bottom round left off, which is at
+    // s = e and at the height the quadratic has reached by then.
+    const atBottom = y0 + k * e * e;
+    return atBottom + grade * (s - e);
+  }
+
+  const inX = axis === 'z';
+  return {
+    kind: 'ramp',
+    axis,
+    from,
+    to,
+    y0,
+    y1,
+    ease: e,
+    len,
+    minX: inX ? c0 : lo,
+    maxX: inX ? c1 : hi,
+    minZ: inX ? lo : c0,
+    maxZ: inX ? hi : c1,
+    run,
+    rise,
+    // Height at 0..1 along the climb, which is what the mesh walks.
+    heightOn(t) {
+      const u = Math.max(0, Math.min(1, t));
+      return heightAlong(u * len);
+    },
+    opts,
+    covers(x, z) {
+      const along = inX ? z : x;
+      const across = inX ? x : z;
+      return along >= lo && along <= hi && across >= c0 && across <= c1;
+    },
+    heightAt(x, z) {
+      const along = inX ? z : x;
+      return heightAlong((along - from) * dir);
+    },
+    sample(t) {
+      return this.heightOn(t);
+    },
+  };
+}
+
 // A quad of ground: four corners in the XZ plane, each with its own height.
 //
 // The corners are given as [x, z, y]. They must go round the quad in order.
@@ -119,6 +223,13 @@ export function buildFeatureMeshes(features, materials = {}) {
   const group = new THREE.Group();
   const LIFT = 0.03;
   for (const f of features) {
+    const mat = materials[f.opts.material] ?? materials.ground ?? fallback();
+    if (f.kind === 'ramp') {
+      const mesh = rampMesh(f, mat, LIFT);
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      continue;
+    }
     const [a, b, c, d] = f.corners;
     // Two triangles through the four corners, in the order that winds the face
     // upward whichever way the corners were listed.
@@ -135,7 +246,7 @@ export function buildFeatureMeshes(features, materials = {}) {
     // The side of the quad down from its edge to the ground, so a raised piece
     // is not a sheet of paper lying in the air.
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, materials[f.opts.material] ?? materials.ground ?? fallback());
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     if (f.opts.skirt) {
@@ -145,6 +256,38 @@ export function buildFeatureMeshes(features, materials = {}) {
     group.add(mesh);
   }
   return group;
+}
+
+// The mesh for a ramp: the same curve the height is read from, walked in steps
+// across the climb. A ramp is drawn as a strip of quads rather than two
+// triangles, because two triangles would be a straight slope again and the
+// whole point of a ramp is that it is not straight.
+function rampMesh(f, mat, lift) {
+  const steps = Math.max(8, Math.ceil(Math.abs(f.run) / 1.5));
+  const inX = f.axis === 'z';
+  const crossLo = inX ? f.minX : f.minZ;
+  const crossHi = inX ? f.maxX : f.maxZ;
+  const positions = [];
+  const indices = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    const along = f.from + f.run * t;
+    const y = f.heightOn(t) + lift;
+    if (inX) {
+      positions.push(crossLo, y, along, crossHi, y, along);
+    } else {
+      positions.push(along, y, crossLo, along, y, crossHi);
+    }
+    if (i < steps) {
+      const a = i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, mat);
 }
 
 let fallbackMat = null;

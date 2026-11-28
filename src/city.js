@@ -19,10 +19,17 @@ import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
 import { createTerrain, surfaceAreas } from './terrain.js';
-import { buildFeatureMeshes, createLandform, flat, slope } from './landform.js';
+import { buildFeatureMeshes, createLandform, flat, ramp, slope } from './landform.js';
 import { createVehicle } from './vehicle.js';
 
 const SIGNS = MAP.signs;
+
+// How far the ends of the hill's climbs are rounded off, in metres. A climb
+// that starts and stops at full grade meets the flat ground at a crease; this
+// is how much of each end is spent easing the grade in and out instead.
+const HILL_EASE = 8;
+// The arms are shorter and steeper, so they get a shorter round.
+const ARM_EASE = 3;
 
 function housePreset(raw) {
   return {
@@ -344,13 +351,17 @@ export function buildCity() {
     const westReach = h.west ?? taper;
     const out = [];
 
-    // The way up, from the level of the street to the top.
-    out.push(slope([
-      [roadX - hw, zLow, 0],
-      [roadX + hw, zLow, 0],
-      [roadX - hw, zHigh, rise],
-      [roadX + hw, zHigh, rise],
-    ], { material: 'hill', skirt: -0.1 }));
+    // The way up, from the level of the street to the top. Its ends are
+    // rounded so the grade eases in from the flat street and out onto the top
+    // instead of folding sharply at both seams.
+    out.push(ramp({
+      axis: 'z',
+      from: zLow, to: zHigh,
+      cross0: roadX - hw, cross1: roadX + hw,
+      y0: 0, y1: rise,
+      ease: HILL_EASE,
+      opts: { material: 'hill', skirt: -0.1 },
+    }));
 
     // The top, between the top of the climb and the start of the far side.
     out.push(flat(
@@ -360,29 +371,40 @@ export function buildCity() {
     ));
 
     // The way down on the far side.
-    out.push(slope([
-      [roadX - hw, zNorth - taper, 0],
-      [roadX + hw, zNorth - taper, 0],
-      [roadX - hw, zNorth, rise],
-      [roadX + hw, zNorth, rise],
-    ], { material: 'hill', skirt: -0.1 }));
+    out.push(ramp({
+      axis: 'z',
+      from: zNorth, to: zNorth - taper,
+      cross0: roadX - hw, cross1: roadX + hw,
+      y0: rise, y1: 0,
+      ease: HILL_EASE,
+      opts: { material: 'hill', skirt: -0.1 },
+    }));
 
     // The two arms, which run out sideways from the top along the cross road.
     // They are level along the road and fall away to nothing at their ends.
+    // The two arms, which run out sideways from the top along the cross road.
+    // They are level along the road and fall away to nothing at their ends,
+    // and like the climb their ends are rounded so they meet the level top and
+    // the flat ground at the bottom without a fold.
     const armZ0 = zTop - ROAD_W / 2;
     const armZ1 = zTop + ROAD_W / 2;
-    out.push(slope([
-      [roadX - hw, armZ0, rise],
-      [roadX - westReach, armZ0, 0],
-      [roadX - hw, armZ1, rise],
-      [roadX - westReach, armZ1, 0],
-    ], { material: 'hill', skirt: -0.1 }));
-    out.push(slope([
-      [roadX + hw, armZ0, rise],
-      [roadX + taper, armZ0, 0],
-      [roadX + hw, armZ1, rise],
-      [roadX + taper, armZ1, 0],
-    ], { material: 'hill', skirt: -0.1 }));
+    const westArm = ramp({
+      axis: 'x',
+      from: roadX - hw, to: roadX - westReach,
+      cross0: armZ0, cross1: armZ1,
+      y0: rise, y1: 0,
+      ease: ARM_EASE,
+      opts: { material: 'hill', skirt: -0.1 },
+    });
+    const eastArm = ramp({
+      axis: 'x',
+      from: roadX + hw, to: roadX + taper,
+      cross0: armZ0, cross1: armZ1,
+      y0: rise, y1: 0,
+      ease: ARM_EASE,
+      opts: { material: 'hill', skirt: -0.1 },
+    });
+    out.push(westArm, eastArm);
 
     // The shelf the safehouse stands on. It is a piece of level ground set into
     // the way up, at the height the road has reached by its door, so the house

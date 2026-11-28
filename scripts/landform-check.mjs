@@ -16,7 +16,7 @@ globalThis.document = {
   },
 };
 
-const { createLandform, flat, slope } = await import('../src/landform.js');
+const { createLandform, flat, ramp, slope } = await import('../src/landform.js');
 
 let failures = 0;
 function check(label, ok, detail = '') {
@@ -104,74 +104,85 @@ function check(label, ok, detail = '') {
     `worst step ${worst.toFixed(4)} m`);
 }
 
-// The hill in the map, rebuilt from features, has to be the same ground the
-// chain of ifs used to describe. That equivalence is what makes this a
-// refactor rather than a redesign: the terrain moved into data without the
-// shape of the world changing under anyone's feet.
+// A climb has to be smooth where it meets the flat. A straight slope meets
+// the level at a crease: the height is continuous, but the gradient jumps from
+// nothing to the whole grade in one step, which reads as a hard fold in the
+// road and pitches a car all at once. A ramp eases the grade in and out of
+// each end instead, so this checks that the gradient a car feels does not jump,
+// and that the climb still covers the height it did.
 {
   const { MAP, ROAD_W, WALK } = await import('../src/config.js');
   const h = MAP.hill;
   const hw = ROAD_W / 2 + WALK;
-  const zNorth = h.zHigh - ROAD_W;
-  const { roadX, zLow, zHigh, rise, taper } = h;
-
-  // The old description, kept here as the reference the features are held to.
-  function oldHeight(x, z) {
-    if (Math.abs(x - roadX) <= hw && z <= zLow && z >= zHigh) {
-      return rise * (zLow - z) / (zLow - zHigh);
-    }
-    if (Math.abs(x - roadX) <= hw && z <= zHigh && z >= zNorth) return rise;
-    if (Math.abs(x - roadX) <= hw && z < zNorth && z >= zNorth - taper) {
-      return rise * (1 - (zNorth - z) / taper);
-    }
-    const limit = x < roadX ? (h.west ?? taper) : taper;
-    const dist = Math.abs(x - roadX);
-    if (Math.abs(z - h.zTop) <= ROAD_W / 2 && dist > hw && dist <= limit) {
-      return rise * (1 - (dist - hw) / (limit - hw));
-    }
-    if (h.pad && x >= h.pad.minX && x <= h.pad.maxX
-      && z >= h.pad.minZ && z <= h.pad.maxZ) return h.pad.y;
-    return 0;
-  }
-
-  const padY = rise * (zLow - h.pad.doorZ) / (zLow - zHigh);
-  const westReach = h.west ?? taper;
-  const armZ0 = h.zTop - ROAD_W / 2;
-  const armZ1 = h.zTop + ROAD_W / 2;
-  const land = createLandform([
-    slope([
-      [roadX - hw, zLow, 0], [roadX + hw, zLow, 0],
-      [roadX - hw, zHigh, rise], [roadX + hw, zHigh, rise],
-    ]),
-    flat(roadX - hw, zNorth, roadX + hw, zHigh, rise),
-    slope([
-      [roadX - hw, zNorth - taper, 0], [roadX + hw, zNorth - taper, 0],
-      [roadX - hw, zNorth, rise], [roadX + hw, zNorth, rise],
-    ]),
-    slope([
-      [roadX - hw, armZ0, rise], [roadX - westReach, armZ0, 0],
-      [roadX - hw, armZ1, rise], [roadX - westReach, armZ1, 0],
-    ]),
-    slope([
-      [roadX + hw, armZ0, rise], [roadX + taper, armZ0, 0],
-      [roadX + hw, armZ1, rise], [roadX + taper, armZ1, 0],
-    ]),
-    flat(h.pad.minX, h.pad.minZ, h.pad.maxX, h.pad.maxZ, padY),
+  const { roadX, zLow, zHigh, rise } = h;
+  const hill = createLandform([
+    ramp({
+      axis: 'z', from: zLow, to: zHigh,
+      cross0: roadX - hw, cross1: roadX + hw,
+      y0: 0, y1: rise, ease: 8,
+    }),
+    flat(roadX - hw, zHigh - ROAD_W, roadX + hw, zHigh, rise),
   ]);
 
-  let worst = 0;
-  let at = null;
-  for (let x = -140; x <= -80; x += 0.5) {
-    for (let z = -90; z <= 5; z += 0.5) {
-      const d = Math.abs(oldHeight(x, z) - land.heightAt(x, z));
-      if (d > worst) {
-        worst = d;
-        at = { x, z };
-      }
+  const grade = (z, e = 0.05) => (hill.heightAt(roadX, z + e) - hill.heightAt(roadX, z - e)) / (2 * e);
+
+  check('the climb still starts at the level of the street',
+    Math.abs(hill.heightAt(roadX, zLow)) < 1e-9,
+    `${hill.heightAt(roadX, zLow).toFixed(4)}`);
+  check('the climb still reaches the top',
+    Math.abs(hill.heightAt(roadX, zHigh) - rise) < 1e-9,
+    `${hill.heightAt(roadX, zHigh).toFixed(4)}`);
+
+  // Just inside the climb at each end, where a straight slope would already be
+  // at full grade and a ramp has barely started to climb.
+  check('the grade is flat just inside the bottom of the climb',
+    Math.abs(grade(zLow - 0.3)) < 0.03, `${(grade(zLow - 0.3) * 100).toFixed(2)}%`);
+  check('the grade is flat just inside the top of the climb',
+    Math.abs(grade(zHigh + 0.3)) < 0.03, `${(grade(zHigh + 0.3) * 100).toFixed(2)}%`);
+
+  let worstJump = 0;
+  let at = 0;
+  for (let z = zHigh; z <= zLow - 0.25; z += 0.25) {
+    const jump = Math.abs(grade(z + 0.25) - grade(z));
+    if (jump > worstJump) {
+      worstJump = jump;
+      at = z;
     }
   }
-  check('the hill from features is the hill the ifs described', worst < 0.01,
-    `worst ${worst.toFixed(4)} m difference${at ? ` at ${at.x}, ${at.z}` : ''}`);
+  check('the grade does not jump anywhere on the climb', worstJump < 0.03,
+    `worst jump ${(worstJump * 100).toFixed(2)}% at z ${at.toFixed(1)}`);
+
+  // What the crease used to be: a straight slope jumps its whole grade at once.
+  const straight = rise / Math.abs(zHigh - zLow);
+  check('a straight slope would jump the whole grade in one step, so the ramp is smoother',
+    straight > worstJump * 2,
+    `straight ${(straight * 100).toFixed(1)}% against a worst jump of ${(worstJump * 100).toFixed(2)}%`);
+
+  // The arms of the cross road come off the level top and fall away sideways.
+  // They are shorter and much steeper than the climb, and they were the fold a
+  // car ended up parked across, so they get the same treatment.
+  const arm = createLandform([
+    ramp({
+      axis: 'x',
+      from: roadX + hw, to: roadX + h.taper,
+      cross0: h.zTop - ROAD_W / 2, cross1: h.zTop + ROAD_W / 2,
+      y0: rise, y1: 0, ease: 3,
+    }),
+    flat(roadX - hw, h.zTop - ROAD_W / 2, roadX + hw, h.zTop + ROAD_W / 2, rise),
+  ]);
+  const armGrade = (x, e = 0.05) => (arm.heightAt(x + e, h.zTop) - arm.heightAt(x - e, h.zTop)) / (2 * e);
+  check('an arm still starts at the height of the top',
+    Math.abs(arm.heightAt(roadX + hw, h.zTop) - rise) < 1e-9);
+  check('an arm still comes down to the level of the street',
+    Math.abs(arm.heightAt(roadX + h.taper, h.zTop)) < 1e-9);
+
+  let armJump = 0;
+  for (let x = roadX + hw; x <= roadX + h.taper - 0.1; x += 0.1) {
+    armJump = Math.max(armJump, Math.abs(armGrade(x + 0.1) - armGrade(x)));
+  }
+  const armStraight = rise / (h.taper - hw);
+  check('an arm does not fold where it leaves the top', armJump < 0.03,
+    `worst jump ${(armJump * 100).toFixed(2)}%, against ${(armStraight * 100).toFixed(1)}% for a straight one`);
 }
 
 console.log(failures === 0 ? 'OK' : `${failures} failures`);

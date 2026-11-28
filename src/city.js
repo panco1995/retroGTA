@@ -439,6 +439,100 @@ export function buildCity() {
     return hill.covers(x, z);
   }
 
+  // Walls along the edges of the hill, cut into pieces that each know how high
+  // they are.
+  //
+  // The hill's edges are the four sides of the climb and of the far slope, plus
+  // the two long sides of each arm. Along each one the ground on the hill
+  // starts level with the ground outside it and rises: a piece of edge that is
+  // only a few centimetres proud of the street is not a cliff and gets no wall
+  // at all, and a piece five metres up does.
+  //
+  // A piece is a thin oriented box lying along the edge, with `minY` at the
+  // outside ground and `maxY` at the hill's own height there. collision.js
+  // skips a collider whose heights do not overlap the car's, which is what lets
+  // the street beside the climb stay open where the climb is above it.
+  function addHillSides(h) {
+    const { roadX, zLow, zHigh, rise, taper } = h;
+    const zNorth = zHigh - ROAD_W;
+    const hw = ROAD_W / 2 + WALK;
+    const westReach = h.west ?? taper;
+    // How long one piece of edge is. Short enough that the height along it does
+    // not vary much, long enough that there are not hundreds of them.
+    const piece = 4;
+    // How thin the wall is, either side of the line it follows.
+    const thick = 0.35;
+
+    // An edge running along Z, at a fixed x, from z0 to z1. `outside` is the
+    // ground beside the hill, which for all of these is the level of the street.
+    function edgeAlongZ(x, z0, z1, outside) {
+      const dir = Math.sign(z1 - z0) || 1;
+      const len = Math.abs(z1 - z0);
+      const steps = Math.max(1, Math.ceil(len / piece));
+      for (let i = 0; i < steps; i += 1) {
+        const a = z0 + dir * (len * i) / steps;
+        const b = z0 + dir * (len * (i + 1)) / steps;
+        const mid = (a + b) / 2;
+        const top = groundHeight(x, mid);
+        if (top - outside < SIDE_MIN_HEIGHT) continue;
+        colliders.push({
+          obb: true,
+          x,
+          z: mid,
+          heading: 0,
+          halfL: Math.abs(b - a) / 2,
+          halfW: thick,
+          minY: outside,
+          maxY: top,
+        });
+      }
+    }
+
+    // An edge running along X, at a fixed z.
+    function edgeAlongX(z, x0, x1, outside) {
+      const dir = Math.sign(x1 - x0) || 1;
+      const len = Math.abs(x1 - x0);
+      const steps = Math.max(1, Math.ceil(len / piece));
+      for (let i = 0; i < steps; i += 1) {
+        const a = x0 + dir * (len * i) / steps;
+        const b = x0 + dir * (len * (i + 1)) / steps;
+        const mid = (a + b) / 2;
+        const top = groundHeight(mid, z);
+        if (top - outside < SIDE_MIN_HEIGHT) continue;
+        colliders.push({
+          obb: true,
+          x: mid,
+          z,
+          heading: Math.PI / 2,
+          halfL: Math.abs(b - a) / 2,
+          halfW: thick,
+          minY: outside,
+          maxY: top,
+        });
+      }
+    }
+
+    // The climb and the far slope: two sides each, running along Z.
+    for (const side of [-1, 1]) {
+      const x = roadX + side * hw;
+      edgeAlongZ(x, zLow, zHigh, 0);
+      edgeAlongZ(x, zNorth, zNorth - taper, 0);
+    }
+    // The two arms: two long sides each, running along X. Their ground falls
+    // from the top to the street, so only the near end of each is a cliff.
+    const armZ0 = h.zTop - ROAD_W / 2;
+    const armZ1 = h.zTop + ROAD_W / 2;
+    for (const z of [armZ0, armZ1]) {
+      edgeAlongX(z, roadX - hw, roadX - westReach, 0);
+      edgeAlongX(z, roadX + hw, roadX + taper, 0);
+    }
+  }
+
+  // A piece of edge lower than this above the ground beside it is not a cliff:
+  // it is the kerb where the hill meets the street, and a wall there would
+  // close a street that people drive on.
+  const SIDE_MIN_HEIGHT = 0.35;
+
   // A strip of surface that follows the ground under it. `heightAt` is asked
   // along the strip and the strip is bent to it, so the surface a car drives on
   // and the ground it stands on are the same shape by construction: there is no
@@ -503,6 +597,16 @@ export function buildCity() {
       ground: solid(0x3e3a34, 1),
     });
     group.add(ground);
+    // The sides of the hill, as walls that only exist where the hill is above
+    // the ground beside it.
+    //
+    // A car cannot drive through the side of a raised road, but the road is not
+    // raised the whole way: at the foot of the climb its edge is level with the
+    // street, and a wall put there would block the street for nothing. So the
+    // edge is cut into short pieces, and each piece carries the heights it
+    // stands between - the ground outside the hill, and the ground on it - and
+    // only counts for a car whose own span overlaps.
+    addHillSides(h);
 
     // The road and its pavements up the hill, and down the far side.
     addRibbonOnGround(roadX, zLow, zHigh, half, ROAD_TOP, asphaltMat, { color: 0x3a3d42 });

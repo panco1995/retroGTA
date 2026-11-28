@@ -124,7 +124,15 @@ export function circleExitsFromObb(x, z, radius, ox, oz, heading, halfL, halfW) 
 const REGION = { region: true };
 
 // The collider that stops a car, if one does.
-function blockerFor(x, z, heading, length, width, colliders, circles) {
+//
+// `span` is the height range the car occupies, when the caller knows it. A
+// collider that carries `minY`/`maxY` only counts when the two ranges overlap:
+// that is what lets a wall stand along the side of a raised road without
+// blocking the street it passes over, and what a cliff face needs.
+//
+// A collider with no height of its own is a wall of the world - a building, a
+// kerb - and stops anything at any height, which is what it always did.
+function blockerFor(x, z, heading, length, width, colliders, circles, span = null) {
   const halfL = length / 2;
   const halfW = width / 2;
   const fx = Math.sin(heading);
@@ -138,6 +146,9 @@ function blockerFor(x, z, heading, length, width, colliders, circles) {
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.keepInside) continue;
+    // Above or below it, and so not in its way.
+    if (span && c.minY !== undefined
+      && (span.max <= c.minY || span.min >= c.maxY)) continue;
     if (c.obb) {
       if (obbHitsObb(x, z, heading, halfL, halfW, c.x, c.z, c.heading, c.halfL, c.halfW)) return c;
     } else if (c.circle) {
@@ -153,14 +164,14 @@ function blockerFor(x, z, heading, length, width, colliders, circles) {
   return null;
 }
 
-export function vehicleBlocked(x, z, heading, length, width, colliders, circles) {
-  return blockerFor(x, z, heading, length, width, colliders, circles) !== null;
+export function vehicleBlocked(x, z, heading, length, width, colliders, circles, span = null) {
+  return blockerFor(x, z, heading, length, width, colliders, circles, span) !== null;
 }
 
 // The collider that stops the car, so a caller can tell a wall from a piece
 // of street furniture it could throw out of the way instead of bouncing off.
-export function vehicleBlockedBy(x, z, heading, length, width, colliders, circles) {
-  const blocker = blockerFor(x, z, heading, length, width, colliders, circles);
+export function vehicleBlockedBy(x, z, heading, length, width, colliders, circles, span = null) {
+  const blocker = blockerFor(x, z, heading, length, width, colliders, circles, span);
   return blocker === REGION ? null : blocker;
 }
 

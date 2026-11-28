@@ -132,5 +132,66 @@ const ramp = createTerrain({ height: (x, z) => z * RISE });
       .surfaceAt(0, 0).grip === SURFACE_KINDS.asphalt.grip);
 }
 
+// A wall along the side of the hill only exists where the hill is above the
+// ground beside it.
+//
+// The hill has no collider of its own: it is a surface a car stands on, not a
+// thing it hits. So a car driving at its side went straight into the raised
+// ground. A plain wall along the edge would fix that and break something else:
+// the bottom of the climb is level with the street, and a wall there would
+// close the street beside it for nothing.
+//
+// Each piece of the edge carries the heights it stands between - the ground
+// outside the hill and the ground on it - and is only seen by a car whose own
+// height range overlaps. A piece less than a kerb above the street gets no wall
+// at all.
+{
+  const { buildCity } = await import('../src/city.js');
+  const { vehicleBlockedBy } = await import('../src/collision.js');
+  const { MAP, ROAD_W, WALK } = await import('../src/config.js');
+  const city = buildCity();
+  const h = MAP.hill;
+  const hw = ROAD_W / 2 + WALK;
+  const edge = h.roadX + hw;
+  const CAR_SPAN = 3.2;
+
+  const walls = city.colliders.filter((c) => c.minY !== undefined);
+  check('the hill has walls along its sides', walls.length > 10,
+    `${walls.length} pieces`);
+
+  const blocked = (x, z, y) => !!vehicleBlockedBy(
+    x, z, 0, 4.45, 1.85, city.colliders, null, { min: y, max: y + CAR_SPAN },
+  );
+
+  // Well up the climb: a car at the height of the road there is stopped.
+  const upZ = -30;
+  const upY = city.terrain.heightAt(h.roadX, upZ);
+  check('a car cannot drive into the side of the raised road',
+    blocked(edge + 1.2, upZ, upY),
+    `at z ${upZ}, y ${upY.toFixed(2)}`);
+
+  // Near the foot, the ground on the hill is level with the street, so there
+  // is no wall to stop anything: that is a kerb, not a cliff.
+  const footZ = -8;
+  const footY = city.terrain.heightAt(h.roadX, footZ);
+  check('the foot of the climb is not walled off',
+    !blocked(edge + 1.2, footZ, footY),
+    `at z ${footZ}, y ${footY.toFixed(2)}`);
+
+  // The hill is a solid mass of ground, not a viaduct: its sides are earth all
+  // the way up from the street to the road. So a car at street level beside the
+  // steep part is stopped too, which is what a hillside does. What the height
+  // range buys is that a piece of edge which is only a kerb high gets no wall.
+  check('a car at street level is stopped by the hillside, as it should be',
+    blocked(edge + 1.2, upZ, 0),
+    `at z ${upZ}, y 0`);
+
+  // No road crosses the edge, so the walls cannot be blocking one.
+  const crossing = city.roads.filter((r) => r.z > -55 && r.z < -7
+    && r.x - r.w / 2 < edge && r.x + r.w / 2 > edge);
+  check('no road runs across the hill’s edge, so no wall closes one',
+    crossing.length === 0, `${crossing.length} roads cross it`);
+}
+
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

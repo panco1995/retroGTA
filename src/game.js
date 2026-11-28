@@ -58,6 +58,10 @@ const PERSON_HIT_INSET = 0.12;
 // feet or thrown.
 const GRAVITY = PHYSICS_GRAVITY;
 const ATTACK_RANGE = 1.9;
+// How tall a car is taken to be, for the walls that only stand part way up a
+// slope. Generous: a bus is under four metres, and the point is not to clip a
+// wing mirror, it is to tell a wall the car is above from one it is behind.
+const CAR_SPAN = 3.2;
 
 export function createGame(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -604,6 +608,14 @@ export function createGame(canvas) {
 
   // The collider that would stop the car at this spot, if anything would.
   function carBlocker(vehicle, x, z) {
+    // The height the car occupies, so a wall that only stands part way up a
+    // slope can be ignored where the car passes below it. The car's own height
+    // is not stored, so it is taken as the height of a tall van over the ground
+    // it stands on, which covers every vehicle here.
+    const span = {
+      min: vehicle.y ?? world.terrain.heightAt(x, z),
+      max: (vehicle.y ?? world.terrain.heightAt(x, z)) + CAR_SPAN,
+    };
     return vehicleBlockedBy(
       x,
       z,
@@ -612,6 +624,7 @@ export function createGame(canvas) {
       vehicle.width,
       world.colliders,
       null,
+      span,
     );
   }
 

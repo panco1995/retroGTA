@@ -33,13 +33,15 @@
     </div>
 
     <!-- Virtual controls. Only mounted on touch devices, and only while
-         playing; the layout is landscape, the stick on the left thumb and the
-         buttons under the right. -->
+         playing; the layout is landscape, the movement under the left thumb
+         and the actions under the right. On foot the left thumb gets a stick;
+         in a car it gets two arrows and the right hand a throttle. -->
     <div id="touch" class="hidden">
       <div id="touch-look"></div>
       <div id="touch-stick" class="touch-stick">
         <div id="touch-stick-knob" class="touch-stick-knob"></div>
       </div>
+      <div id="touch-steer" class="touch-steer"></div>
       <div id="touch-buttons" class="touch-buttons"></div>
       <button type="button" id="touch-pause" class="touch-btn small touch-pause" data-i18n-aria="pauseTitle">II</button>
     </div>

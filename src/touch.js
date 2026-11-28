@@ -14,15 +14,41 @@ const TRAVEL = 0.82;
 // spin the camera round twice.
 const LOOK_SPEED = 0.0032;
 
-// Every button of the pad. `tap` fires once, `hold` stays down while the
-// finger is on it. The label is picked by mode, because a brake is a jump
-// when the player is on foot.
+// Every button of the pad. `tap` fires once, `holds` lists the actions to hold
+// down while the finger is on it - a list rather than one action because the
+// brake in a car is also the reverse, the way the S key is on a keyboard. A
+// key only appears in the mode it belongs to, and the label is picked by mode
+// because a brake is a jump when walking.
+//
+// Where each one sits is the stylesheet's business: it places them by action,
+// so the bottom slot can hold the punch on foot and the throttle in a car
+// without either of them knowing about the other.
 const BUTTONS = [
-  { action: 'attack', tap: true, label: () => t('touchAttack') },
-  { action: 'brake', tap: true, hold: true, label: (mode) => t(mode === 'drive' ? 'touchBrake' : 'touchJump') },
+  { action: 'attack', tap: true, modes: 'foot', label: () => t('touchAttack') },
+  { action: 'forward', modes: 'drive', holds: () => ['forward'], label: () => t('touchThrottle') },
+  {
+    // In a car the trigger is the key S is on a keyboard: it is the reverse,
+    // and the reverse is also the brake, because a negative throttle takes
+    // speed off while the car is still rolling forward. It must not hold the
+    // foot brake as well: 22 m/s² of braking against 7.5 m/s² of reverse
+    // cancels out and the car sits at a crawl.
+    action: 'brake',
+    tap: true,
+    holds: (mode) => (mode === 'drive' ? ['back'] : ['brake']),
+    label: (mode) => t(mode === 'drive' ? 'touchBrake' : 'touchJump'),
+  },
   { action: 'interact', tap: true, label: (mode) => t(mode === 'drive' ? 'touchExit' : 'touchEnter') },
   { action: 'camera', tap: true, small: true, label: () => t('touchCamera') },
   { action: 'map', tap: true, small: true, label: () => t('touchMap') },
+];
+
+// Driving is two arrows and a throttle. A stick is the wrong shape for it: a
+// car keeps only what the wheel is doing, so a thumb held at a spot to hold a
+// turn is more work than a thumb on a key, and the throttle is a key of its
+// own rather than a direction the wheel shares.
+const STEER = [
+  { action: 'left', holds: () => ['left'], label: () => '‹' },
+  { action: 'right', holds: () => ['right'], label: () => '›' },
 ];
 
 let padVisible = loadVisible();
@@ -150,40 +176,84 @@ export function createTouchPad({ input, onLook, onPause }) {
 
   function label(entry) {
     entry.el.textContent = entry.spec.label(mode);
-    entry.el.setAttribute('aria-label', entry.spec.label(mode));
+    entry.el.setAttribute('aria-label', specLabel(entry.spec));
   }
 
-  for (const spec of BUTTONS) {
+  // The arrows are a glyph, so naming them for a screen reader takes the
+  // spelled-out words rather than the character.
+  function specLabel(spec) {
+    if (spec.action === 'left') return t('touchLeft');
+    if (spec.action === 'right') return t('touchRight');
+    return spec.label(mode);
+  }
+
+  // A button is only on the pad in the mode it belongs to: no throttle while
+  // walking, no punch while driving.
+  function shown(spec) {
+    return !spec.modes || spec.modes === mode;
+  }
+
+  // Lets go of everything one button is holding. Kept outside makeButton
+  // because the mode switch has to do it too, for a key that vanished from
+  // under a thumb.
+  function release(entry) {
+    if (!entry.down) return;
+    entry.down = false;
+    entry.el.classList.remove('pressed');
+    for (const action of entry.held) input.unhold(action);
+    entry.held = [];
+  }
+
+  // One press-and-hold button. The pad's cluster and the steering arrows are
+  // the same thing with a different place in the layout, so they are built by
+  // the same function.
+  function makeButton(spec, parent, className) {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = `touch-btn${spec.small ? ' small' : ''}`;
+    el.className = className;
     el.dataset.action = spec.action;
-    const entry = { spec, el, down: false };
+    const entry = { spec, el, down: false, held: [] };
     entries.push(entry);
 
+    // What this key is holding this press. Kept on the entry rather than read
+    // from the spec at release, because the mode may have changed under it: a
+    // brake pressed on foot is let go of as a brake, not as the reverse the
+    // same key would mean in a car.
     const press = (event) => {
       if (entry.down) return;
       stopTouch(event);
       entry.down = true;
+      entry.held = spec.holds?.(mode) ?? [];
       el.classList.add('pressed');
       capture(el, event.pointerId);
-      if (spec.hold) input.hold(spec.action);
+      for (const action of entry.held) input.hold(action);
       if (spec.tap) input.tap(spec.action);
     };
-    const release = (event) => {
+    const lift = (event) => {
       if (!entry.down) return;
       stopTouch(event);
-      entry.down = false;
-      el.classList.remove('pressed');
-      if (spec.hold) input.unhold(spec.action);
+      release(entry);
     };
 
     el.addEventListener('pointerdown', press);
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', release);
-    el.addEventListener('lostpointercapture', release);
+    el.addEventListener('pointerup', lift);
+    el.addEventListener('pointercancel', lift);
+    el.addEventListener('lostpointercapture', lift);
     el.addEventListener('contextmenu', (event) => event.preventDefault());
-    pad.append(el);
+    parent.append(el);
+    return entry;
+  }
+
+  for (const spec of BUTTONS) {
+    spec.el = makeButton(spec, pad, `touch-btn${spec.small ? ' small' : ''}`).el;
+  }
+
+  // The two steering arrows, left thumb, only while driving.
+  const steerEl = document.getElementById('touch-steer');
+  for (const spec of STEER) {
+    spec.el = makeButton(spec, steerEl, 'touch-btn touch-steer-btn').el;
+    spec.el.textContent = spec.label();
+    spec.el.setAttribute('aria-label', specLabel(spec));
   }
 
   // The stick: a fixed base with a knob that follows the thumb. Pushing it
@@ -260,15 +330,40 @@ export function createTouchPad({ input, onLook, onPause }) {
     onPause?.();
   });
 
+  // The mode picks which set of keys is on screen: the stick and the punch on
+  // foot, the arrows and the throttle in a car. Anything that changes shape
+  // with the mode is redrawn here, and nothing that is being held is left
+  // behind - a stick that vanished under a thumb would keep walking.
+  function applyMode() {
+    const driving = mode === 'drive';
+    root.classList.toggle('driving', driving);
+    if (!driving) {
+      // The stick is only on foot, so a car gets its turn without one.
+      stickId = null;
+      stick.classList.remove('active');
+      knob.style.transform = '';
+      input.clearStick();
+    }
+    for (const entry of entries) {
+      label(entry);
+      entry.el.hidden = !shown(entry.spec);
+      // A key that is being held when the mode flips is released, so it cannot
+      // stick down with no button to let go of.
+      if (!shown(entry.spec) && entry.down) {
+        release(entry);
+      }
+    }
+  }
+
   const api = {
     get visible() { return !root.classList.contains('hidden'); },
     setMode(next) {
       if (next === mode) return;
       mode = next;
-      for (const entry of entries) label(entry);
+      applyMode();
     },
     // The pad itself is mounted whenever the game is playing; the setting only
-    // hides the stick and the buttons, leaving the look area and the pause key.
+    // hides the keys, leaving the look area and the pause key.
     show() {
       root.classList.remove('hidden');
       api.syncVisible();
@@ -281,12 +376,7 @@ export function createTouchPad({ input, onLook, onPause }) {
       document.body.classList.toggle('pad-off', !padVisible);
     },
     reset() {
-      for (const entry of entries) {
-        if (!entry.down) continue;
-        entry.down = false;
-        entry.el.classList.remove('pressed');
-        if (entry.spec.hold) input.unhold(entry.spec.action);
-      }
+      for (const entry of entries) release(entry);
       stickId = null;
       lookId = 0;
       stick.classList.remove('active');
@@ -301,6 +391,7 @@ export function createTouchPad({ input, onLook, onPause }) {
   for (const entry of entries) label(entry);
   onLangChange(() => api.refresh());
   api.syncVisible();
+  applyMode();
   activePad = api;
   return api;
 }

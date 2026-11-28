@@ -1498,10 +1498,18 @@ export function createGame(canvas) {
     const throttle = input.throttle;
     // heading 0 points the nose toward +Z, so a right turn must decrease heading.
     const steerInput = input.steer;
+    // The pedal in a car is the reverse, and the reverse is the brake: a
+    // negative throttle takes speed off while the car is rolling forward, and
+    // backs it up once it has stopped. The foot brake is a separate key (space
+    // on a keyboard, the jump key on a pad), and it only ever scrubs speed off
+    // and stops at zero rather than pushing the car the other way.
     hero.braking = input.brake && Math.abs(hero.speed) > 0.2;
     const accel = throttle > 0 ? 9.5 : 7.5;
     hero.speed += throttle * accel * dt;
-    if (hero.braking) hero.speed -= Math.sign(hero.speed) * 22 * dt;
+    if (hero.braking) {
+      const drop = 22 * dt;
+      hero.speed = Math.abs(hero.speed) <= drop ? 0 : hero.speed - Math.sign(hero.speed) * drop;
+    }
     // The ground under the car decides how much of the engine's push it keeps,
     // and how much speed it can reach at all. A surface that drags holds the
     // car back in proportion to how fast it is going, which is what makes sand

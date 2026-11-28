@@ -1090,6 +1090,11 @@ html.touch {
   opacity: 0.86;
 }
 
+/* A key that does not belong to this mode is hidden outright. The attribute
+   alone is not enough: `display: grid` above outranks the user agent's rule
+   for [hidden], so a punch would stay on the pad while driving. */
+.touch-btn[hidden] { display: none; }
+
 .touch-btn.pressed {
   color: #fff8e2;
   border-color: rgba(240, 212, 138, 0.9);
@@ -1097,15 +1102,44 @@ html.touch {
   transform: scale(0.95);
 }
 
-.touch-buttons [data-action="map"] { grid-area: 1 / 1; }
-.touch-buttons [data-action="camera"] { grid-area: 1 / 2; }
-.touch-buttons [data-action="interact"] { grid-area: 2 / 1; }
-.touch-buttons [data-action="brake"] { grid-area: 2 / 2; }
+/* One grid slot per key, by what it does rather than where it sits, so the
+   main slot can hold the punch on foot and the throttle in a car without the
+   layout knowing which. */
+[data-action="map"] { grid-area: 1 / 1; }
+[data-action="camera"] { grid-area: 1 / 2; }
+[data-action="interact"] { grid-area: 2 / 1; }
+[data-action="brake"] { grid-area: 2 / 2; }
 
-.touch-buttons [data-action="attack"] {
+[data-action="attack"],
+[data-action="forward"] {
   grid-area: 3 / 2;
   width: calc(var(--u) * 1.14);
   height: calc(var(--u) * 1.14);
+}
+
+/* The steering arrows sit where the stick was, side by side, each about the
+   size of a main button. */
+.touch-steer {
+  position: absolute;
+  left: var(--edge);
+  bottom: var(--edge-b);
+  display: none;
+  align-items: flex-end;
+  gap: calc(var(--u) * 0.22);
+  pointer-events: none;
+}
+
+/* In a car the stick goes and the arrows take the left thumb. */
+#touch.driving .touch-stick { display: none; }
+#touch.driving .touch-steer { display: flex; }
+
+.touch-steer-btn {
+  width: calc(var(--u) * 1.16);
+  height: calc(var(--u) * 1.16);
+  font-size: calc(var(--u) * 0.6);
+  line-height: 1;
+  letter-spacing: 0;
+  padding-bottom: calc(var(--u) * 0.08);
 }
 
 .touch-pause {
@@ -1121,8 +1155,12 @@ html.touch {
 
 /* With the pad switched off in the settings, only the look area and the pause
    key stay, so the screen is clear. */
-body.pad-off .touch-stick,
-body.pad-off .touch-buttons { display: none; }
+/* With the keys switched off in the settings, the screen is clear. Each rule
+   is written to outrank the driving one that shows the arrows, or the arrows
+   would come back the moment the player got in a car. */
+body.pad-off #touch .touch-stick,
+body.pad-off #touch .touch-buttons,
+body.pad-off #touch.driving .touch-steer { display: none; }
 
 /* Keep the HUD off the notch and clear of the pad. */
 html.touch #place-wrap { top: max(14px, env(safe-area-inset-top)); left: max(16px, env(safe-area-inset-left)); }

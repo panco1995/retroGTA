@@ -26,6 +26,14 @@ const THREE = await import('three');
 const { WALK_TOP } = await import('../src/config.js');
 const { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } = await import('../src/props.js');
 const { createPropPhysics } = await import('../src/prop-physics.js');
+const { stepPhysics } = await import('../src/ragdoll.js');
+
+// The world is shared with the bodies that get knocked down now, so a frame is
+// one step of the world and then one read of the result.
+function tick(props, dt = 1 / 60) {
+  stepPhysics(dt);
+  props.step(dt);
+}
 const { vehicleBlocked, vehicleBlockedBy } = await import('../src/collision.js');
 const { ColliderList } = await import('../src/spatial.js');
 
@@ -50,7 +58,7 @@ function place(build, x = 0, z = 0, extra = {}) {
 }
 
 function settle(props, frames = 300) {
-  for (let i = 0; i < frames; i += 1) props.step(1 / 60);
+  for (let i = 0; i < frames; i += 1) tick(props);
 }
 
 // The lowest point of the prop as it can be seen. The group stands at the
@@ -100,6 +108,7 @@ function driveInto(entry, props, colliders, group, speed, dt = 1 / 60, frames = 
     } else {
       car.speed *= -0.22;
     }
+    stepPhysics(dt);
     props.step(dt);
     const box = new THREE.Box3().setFromObject(group);
     const pen = overlap(car, box);
@@ -163,8 +172,16 @@ function driveInto(entry, props, colliders, group, speed, dt = 1 / 60, frames = 
   check('the hydrant moves', group.position.x > 0.5, `x ${group.position.x.toFixed(2)}`);
   check('the hydrant rests on the ground', Math.abs(lowest(group) - WALK_TOP) < 0.25,
     `lowest ${lowest(group).toFixed(2)}`);
+  // A hydrant that has landed on its side is blocked by the box around it, so
+  // the collider is where the box is, not where the foot of the group is.
+  // The cap on top of the barrel is a sphere the body approximates, so its
+  // box and the body's box differ by a few centimetres.
+  const hydrantBox = new THREE.Box3().setFromObject(group);
+  const hx = (hydrantBox.min.x + hydrantBox.max.x) / 2;
+  const hz = (hydrantBox.min.z + hydrantBox.max.z) / 2;
   check('the hydrant collider follows it',
-    Math.abs(collider.x - group.position.x) < 0.01 && Math.abs(collider.z - group.position.z) < 0.01);
+    Math.abs(collider.x - hx) < 0.06 && Math.abs(collider.z - hz) < 0.06,
+    `collider ${collider.x.toFixed(2)},${collider.z.toFixed(2)} mesh ${hx.toFixed(2)},${hz.toFixed(2)}`);
   check('the hydrant comes to rest', !entry.flying);
 }
 
@@ -177,9 +194,10 @@ function driveInto(entry, props, colliders, group, speed, dt = 1 / 60, frames = 
   check('the dumpster moves', group.position.x > 0.2, `x ${group.position.x.toFixed(2)}`);
   check('the dumpster rests on the ground', Math.abs(lowest(group) - WALK_TOP) < 0.25,
     `lowest ${lowest(group).toFixed(2)}`);
+  const dumpsterBox = new THREE.Box3().setFromObject(group);
   check('the dumpster collider follows it',
-    Math.abs(collider.x - group.position.x) < 0.01
-    && Math.abs(collider.z - group.position.z) < 0.01);
+    Math.abs(collider.x - (dumpsterBox.min.x + dumpsterBox.max.x) / 2) < 0.02
+    && Math.abs(collider.z - (dumpsterBox.min.z + dumpsterBox.max.z) / 2) < 0.02);
   check('the dumpster keeps its heading', Number.isFinite(collider.heading));
   check('the dumpster comes to rest', !entry.flying);
 }
@@ -255,6 +273,7 @@ for (const [name, build] of [
     } else if (!blocker) {
       car.z = nz;
     }
+    stepPhysics(dt);
     props.step(dt);
   }
   check('the skip is shouldered along', pushed > 5, `${pushed} contacts`);
@@ -289,6 +308,7 @@ for (const [name, build] of [
     width: 1.85,
   };
   props.knock(entry, 0, 12, mover2, 1 / 60);
+  stepPhysics(1 / 60);
   props.step(1 / 60);
   const after = upOf(group);
   check('a skip hit again keeps the pose it landed in',
@@ -308,6 +328,7 @@ for (const [name, build] of [
       entry.body.velocity.set(0, 0, 0);
       entry.body.angularVelocity.set(0, 0, 0);
     }
+    stepPhysics(1 / 60);
     props.step(1 / 60);
     frames += 1;
     if (!entry.flying) break;
@@ -359,6 +380,7 @@ for (const [name, build] of [
   const footZ = built.group.position.z;
   let halfway = 0;
   for (let i = 0; i < 120; i += 1) {
+    stepPhysics(1 / 60);
     props.step(1 / 60);
     const up = upOf(built.group);
     if (!halfway && up < 0.8 && up > 0.2) halfway = up;

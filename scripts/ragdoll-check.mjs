@@ -22,7 +22,17 @@ globalThis.document = {
 
 const THREE = await import('three');
 const { animateActor, createActor, setPose } = await import('../src/actor.js');
-const { ragdollOf, startRagdoll, stepRagdolls } = await import('../src/ragdoll.js');
+const { ragdollOf, startRagdoll, stepPhysics, stepRagdolls } = await import('../src/ragdoll.js');
+
+// The world is shared with the street furniture now, so a frame is one step of
+// the world and then one read of the result. The game does this once a frame;
+// the check does it here.
+function tick(frames) {
+  for (let i = 0; i < frames; i += 1) {
+    stepPhysics(1 / 60);
+    stepRagdolls(1 / 60);
+  }
+}
 
 function makeActor(height = 1) {
   const actor = createActor({ height });
@@ -50,7 +60,7 @@ const handle = startRagdoll(actor, {
 });
 check('a ragdoll starts', !!handle && ragdollOf(actor) === handle);
 
-for (let i = 0; i < 600; i += 1) stepRagdolls(1 / 60);
+tick(600);
 const after = world(actor.hips);
 check('the body falls', after.y < before.y - 0.2, `hips ${before.y.toFixed(2)} -> ${after.y.toFixed(2)}`);
 check('the body lands on the ground', after.y > -0.1 && after.y < 0.6, `hips y ${after.y.toFixed(2)}`);
@@ -70,7 +80,7 @@ check('the landing pose is kept for the get up', !!actor.getupFrom);
 // A shorter person.
 const small = makeActor(0.75);
 startRagdoll(small, { x: 0, z: 0, groundY: 0, colliders: [] });
-for (let i = 0; i < 300; i += 1) stepRagdolls(1 / 60);
+tick(300);
 check('a short person lands too', world(small.hips).y > -0.1 && world(small.hips).y < 0.6);
 check('a short person stays whole', world(small.hips).distanceTo(world(small.parts.torso)) < 0.45);
 
@@ -78,13 +88,13 @@ check('a short person stays whole', world(small.hips).distanceTo(world(small.par
 const wall = { minX: 1.5, maxX: 3.5, minZ: -5, maxZ: 5 };
 const walled = makeActor();
 startRagdoll(walled, { x: 0, z: 0, groundY: 0, vx: 6, vy: 0, vz: 0, colliders: [wall] });
-for (let i = 0; i < 600; i += 1) stepRagdolls(1 / 60);
+tick(600);
 check('the wall stops the body', world(walled.hips).x < 1.5, `hips x ${world(walled.hips).x.toFixed(2)}`);
 
 // The character gets up from where it landed.
 const getting = makeActor();
 startRagdoll(getting, { x: 0, z: 0, groundY: 0, vx: 5, vy: 1, vz: 0, colliders: [] });
-for (let i = 0; i < 600; i += 1) stepRagdolls(1 / 60);
+tick(600);
 const landed = getting.hips.position.y;
 setPose(getting, 'getup');
 for (let i = 0; i < 120; i += 1) animateActor(getting, 0, i / 60, 1 / 60);

@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { WALK_TOP } from './config.js';
-import { buildWalls, createWorld } from './physics.js';
+import { GROUP, buildWalls, inGroup, physicsWorld } from './physics.js';
 
 // How long a prop may be in the air before it is stopped where it lies. It is
 // only stopped once it is back on the ground: a prop frozen in mid air would
@@ -48,8 +48,12 @@ const SCRAPE = 2.2;
 // so this is a guard against a jump, not part of the maths.
 const MAX_SHIFT = 0.9;
 // How much faster than the car a shoved prop is sent, so the gap the shove
-// opened survives into the next frame.
-const SHOVE_LEAD = 1.06;
+// opened survives into the next frame. It has to be enough for the prop to
+// stay clear through the whole time the car is behind it, and the car closes
+// that gap faster now that everything falls at one gravity: a prop thrown at
+// speed comes down sooner than it used to, so the car catches it again with
+// less of a gap to spare.
+const SHOVE_LEAD = 1.16;
 // How upright a prop has to be for its own footprint to be the right one.
 // Past this it has tipped, and only a box around it tells the truth.
 const UPRIGHT = 0.92;
@@ -62,7 +66,7 @@ const CAR_HEIGHT = 1.5;
 const TO_TOPPLE_RATE = 1.55;
 
 export function createPropPhysics({ colliders, ground, onLand = null }) {
-  const world = createWorld();
+  const world = physicsWorld();
   // Every prop that can be knocked out of the way.
   const all = new Set();
   // The ones that are on the move right now.
@@ -163,6 +167,9 @@ export function createPropPhysics({ colliders, ground, onLand = null }) {
       group.position.z + centre.z,
     );
     body.quaternion.copy(turn);
+    // A prop only meets other props, and the ground and walls built for one.
+    // It is not stopped by the walls put up around somebody falling over.
+    inGroup(body, GROUP.prop, GROUP.prop | GROUP.propWorld | GROUP.all);
     world.addBody(body);
 
     // The car is already into the prop: it hit between two frames, and at
@@ -209,6 +216,8 @@ export function createPropPhysics({ colliders, ground, onLand = null }) {
       // Street furniture is not in the way of other street furniture, so one
       // heap of rubbish cannot stop another one from being thrown.
       (c) => !!c.prop,
+      GROUP.propWorld,
+      GROUP.prop | GROUP.all,
     );
     entry.flying = true;
     entry.time = 0;
@@ -465,7 +474,9 @@ export function createPropPhysics({ colliders, ground, onLand = null }) {
     }
     if (flying.size === 0) return;
     // The cars in the engine are moved to wherever the game put them, so the
-    // engine's answer is about the car as it is on screen now.
+    // engine's answer is about the car as it is on screen now. The world itself
+    // is stepped by the game, once a frame, because it is shared with the
+    // bodies that have been knocked down.
     if (cars) {
       for (const entry of flying) {
         if (!entry.car) continue;
@@ -473,7 +484,6 @@ export function createPropPhysics({ colliders, ground, onLand = null }) {
         if (mover) moveCar(entry, mover);
       }
     }
-    world.step(1 / 60, dt, 4);
     for (const entry of [...flying]) {
       entry.time += dt;
       const touching = land(entry, dt);

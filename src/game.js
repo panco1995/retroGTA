@@ -17,13 +17,14 @@ import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
 import { createPropPhysics } from './prop-physics.js';
 import { settleOnGround } from './terrain.js';
-import { releaseRagdoll, startRagdoll, stepRagdolls } from './ragdoll.js';
+import { releaseRagdoll, startRagdoll, stepPhysics, stepRagdolls } from './ragdoll.js';
 import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
 import { keyVars, onBindingsChange } from './bindings.js';
 import { backPage, currentPage, onPageChange, openMainMenu, showPage, showPauseHome } from './menu.js';
 import { VEHICLE_COLORS, VEHICLE_TYPES, vehicleFootprint } from './vehicle.js';
 import { createBlood } from './blood.js';
+import { GRAVITY as PHYSICS_GRAVITY } from './physics.js';
 import { createShocks } from './shocks.js';
 
 const VIEW_ORDER = ['follow', 'first', 'top', 'iso'];
@@ -51,7 +52,11 @@ const PERSON_MASS = 1;
 // People are a narrower target than the painted body, so grazing the door
 // does not count as a hit.
 const PERSON_HIT_INSET = 0.12;
-const GRAVITY = 24;
+// A person's jump is worked out here rather than by the engine, but it falls
+// at the same rate as everything the engine has: one number for the whole
+// game, so a body in the air behaves the same whether it was knocked off its
+// feet or thrown.
+const GRAVITY = PHYSICS_GRAVITY;
 const ATTACK_RANGE = 1.9;
 
 export function createGame(canvas) {
@@ -1992,6 +1997,10 @@ export function createGame(canvas) {
     crushPeople(dt);
     unclipPeople();
     tickBodies(dt);
+    // One step of the one world, then each kind of body reads the result.
+    // Everything in it - a body being knocked down, a skip being shoved - moves
+    // together, so a bag thrown across the street can land on somebody.
+    stepPhysics(dt);
     // The bodies are placed before the engine writes its result, so the
     // ragdoll's local pose is measured against where the actor already is.
     stepRagdolls(dt);

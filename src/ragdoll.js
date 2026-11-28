@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { buildGround, buildWalls, createWorld } from './physics.js';
+import { GROUP, buildGround, buildWalls, inGroup, physicsWorld } from './physics.js';
 
 const THIGH_LEN = 0.44;
 const SHIN_LEN = 0.38;
@@ -27,7 +27,7 @@ let engine = null;
 const live = new Set();
 
 function physics() {
-  if (!engine) engine = createWorld();
+  if (!engine) engine = physicsWorld();
   return engine;
 }
 
@@ -99,6 +99,10 @@ export function startRagdoll(actor, opts = {}) {
     const centre = at.clone().applyQuaternion(quat);
     body.position.set(pos.x + centre.x, pos.y + centre.y, pos.z + centre.z);
     body.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+    // A joint only has to meet other bodies, and the ground and walls that
+    // were built for one. It is not shoved by the walls put up for a flying
+    // piece of street furniture.
+    inGroup(body, GROUP.body, GROUP.body | GROUP.bodyWorld | GROUP.all);
     world.addBody(body);
 
     part.body = body;
@@ -130,8 +134,11 @@ export function startRagdoll(actor, opts = {}) {
 
   // The ground it lands on, and the walls it lands against.
   const groundY = opts.groundY ?? 0;
-  statics.push(buildGround(world, groundY));
-  statics.push(...buildWalls(world, opts.colliders, opts.x ?? 0, opts.z ?? 0, groundY));
+  statics.push(buildGround(world, groundY, GROUP.bodyWorld, GROUP.body | GROUP.all));
+  statics.push(...buildWalls(
+    world, opts.colliders, opts.x ?? 0, opts.z ?? 0, groundY,
+    undefined, null, GROUP.bodyWorld, GROUP.body | GROUP.all,
+  ));
 
   // The hit throws the body along the ground and into the air.
   const vx = opts.vx ?? 0;
@@ -167,11 +174,22 @@ export function startRagdoll(actor, opts = {}) {
   return handle;
 }
 
+// One step of the shared world. Whatever is in it - a body being thrown, a
+// skip being shoved - moves together, so two bodies in the air at once feel
+// each other.
+export function stepPhysics(dt) {
+  physics().step(1 / 60, dt, 4);
+}
+
 // The physics moves every ragdoll at once, then writes the result back onto
 // the actors.
+//
+// The step itself is not taken here any more: the world is shared with the
+// street furniture, so the game steps it once a frame and then asks each of
+// the two to read the result. Stepping here as well would have advanced the
+// world twice in a frame and everything would have fallen at double speed.
 export function stepRagdolls(dt) {
   if (live.size === 0) return;
-  physics().step(1 / 60, dt, 4);
   for (const handle of [...live]) {
     handle.time += dt;
     writeBack(handle);

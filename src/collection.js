@@ -351,8 +351,8 @@ function mount(item) {
   }
 
   const group = built.isObject3D ? built : built.group;
-  // Only vehicles carry a seat, a windshield and a modelled cabin; the open
-  // excavator and the like have none, so they skip the interior view.
+  // Only vehicles carry a seat, a windshield and a modelled cabin; anything
+  // without them skips the interior view rather than showing an empty shell.
   viewer = built.isObject3D
     ? { group, seat: null, windshield: null, cabin: false, driver: null }
     : {

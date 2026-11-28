@@ -27,7 +27,7 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Contextual key prompts for entering, stealing, and exiting cars; the full control hint fades out after the opening seconds
 - Main menu (Start, Collection, Settings, About) with a shared settings page: language, camera view, and rebindable keys saved in the browser
 - Pause menu (Esc): resume, restart, settings, map, cheats, collection, and exit
-- Collection gallery: all 14 vehicles, the 12 pedestrian kinds, five street props, and eight building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
+- Collection gallery: all 12 vehicles, the 12 pedestrian kinds, five street props, and eight building types on a 3D turntable, with an interior view from the driver's seat and a driver NPC toggle
 - Cheats spawn a chosen vehicle beside the player; restart removes them
 - English and Chinese interface
 
@@ -134,11 +134,9 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 | `van` | Van | Tall enclosed cargo body |
 | `bus` | City bus | 10.6 m body, long side windows |
 | `truck` | Box truck | Cab-over cab, large cargo box, dual rear wheels |
-| `excavator` | Excavator | Tracks, boom, arm, and bucket |
 | `ambulance` | Ambulance | White box body, red stripe, red cross, light bar |
 | `firetruck` | Fire truck | Red body, equipment box, roof ladder, light bar, six wheels |
 | `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
-| `mixer` | Cement mixer | Tilted drum, reinforcing rings, rear discharge chute, six wheels |
 
 Passenger cars have clear glass, so their seats and the driver show from outside. The box-bodied vans, buses and trucks keep tinted panes: their body is a solid shell, so there is no cabin behind the glass to show.
 
@@ -189,7 +187,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/shocks.js` | The sparks off a lamp post that has been knocked down: a burst when it lands, and a fitful flicker and more sparks for as long as it lies there |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
-| `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
+| `src/vehicle.js` | Vehicle meshes, driving state, and the 12 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
 | `src/landform.js` | The shape of the ground, as a list of pieces the map declares, in `hill.features`: a ramp, a flat shelf, a slope through four corners. Each answers how high it is and draws itself from the same numbers, so the ground that is drawn and the ground that is stood on cannot drift apart. Reshaping the island's ground, or adding a second hill, is a change to the map and not to the code. A `ramp` eases the grade in and out of each end, so a climb meets the flat street without a fold: the height and the gradient both match, and a car does not pitch all at once at the seam. Each piece answers how high it is and draws itself from the same four corners, so the ground that is drawn and the ground that is stood on cannot drift apart. A hill used to be two things that had to agree - a chain of ifs for the height and hand-rotated boxes for the mesh - and they did not: the east arm's road floated up to four metres above the ground under it |
 | `src/terrain.js` | The ground, as one object: a height, a lean, and what it is made of. Everything asks it, so a car and a walking person are always standing on the same answer. The lean comes from the height by sampling either side, at a step that narrows near a kerb so the flat beside it stays flat. Each material has its own grip and drag, so sand is slower and steers less than asphalt |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge. A collider may carry `minY`/`maxY`, and is then only in the way of a vehicle whose own height range overlaps it: that is what lets the side of a hill be solid without walling off the street at the foot of it, where the hill is level with the street |

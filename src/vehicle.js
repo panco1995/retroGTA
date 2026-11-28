@@ -1137,32 +1137,6 @@ function buildTruck(group, color) {
   addWheelArches(group, wheels, 1.15, color);
   return { wheels, tails: [tailL, tailR], length: 6.6, width: 2.42, radius: 3.3 };
 }
-
-function buildExcavator(group, color) {
-  const paint = solid(color, 0.58, 0.08);
-  const dark = solid(0x1c1e20, 0.7, 0.15);
-  const steel = solid(0x6d7275, 0.5, 0.3);
-  const glass = GLASS_MAT;
-  part(group, 0.62, 0.75, 3.7, dark, -1.0, 0.55, 0);
-  part(group, 0.62, 0.75, 3.7, dark, 1.0, 0.55, 0);
-  part(group, 2.3, 0.25, 2.4, dark, 0, 0.98, 0);
-  part(group, 2.2, 1.2, 2.7, paint, 0, 1.7, -0.35);
-  part(group, 2.25, 0.9, 0.55, paint, 0, 1.55, -1.85);
-  part(group, 0.95, 1.15, 1.35, paint, -0.62, 2.05, 0.45);
-  part(group, 0.05, 0.75, 1.05, glass, -1.11, 2.12, 0.45);
-  part(group, 0.75, 0.7, 0.05, glass, -0.62, 2.15, 1.14);
-  part(group, 0.9, 0.55, 1.8, paint, 0.62, 2.0, -0.7);
-  beam(group, [0, 1.9, 0.6], [0, 3.2, 2.5], 0.45, paint);
-  beam(group, [0, 3.2, 2.5], [0, 1.7, 4.2], 0.32, paint);
-  const bucket = part(group, 1.05, 0.7, 0.75, steel, 0, 1.1, 4.35);
-  bucket.rotation.x = 0.25;
-  beam(group, [0, 1.7, 0.9], [0, 2.75, 1.9], 0.16, steel);
-  beam(group, [0, 3.05, 2.4], [0, 1.95, 3.7], 0.14, steel);
-  beam(group, [0.45, 2.3, -0.5], [0.45, 2.8, -0.5], 0.12, dark);
-  part(group, 0.2, 0.14, 0.2, glow(0xffb020, 0.5), -0.62, 2.7, 0.45);
-  return { wheels: [], tails: [], length: 7.0, width: 2.7, radius: 3.6 };
-}
-
 function buildAmbulance(group, color) {
   const paint = solid(color, 0.5, 0.1);
   const red = solid(0xc22a2a, 0.45, 0.1);
@@ -1284,76 +1258,6 @@ function buildPolice(group, color) {
   part(group, 0.38, 0.14, 0.26, glow(0x2a6cff, 0.7), 0.25, 1.76, -0.15);
   return built;
 }
-
-function buildMixer(group, color) {
-  const paint = solid(color, 0.6, 0.08);
-  const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
-  const steel = solid(0x8a8f92, 0.4, 0.4);
-  part(group, 2.2, 0.32, 7.2, dark, 0, 0.62, 0);
-  part(group, 2.2, 1.7, 2.2, paint, 0, 1.4, 2.7);
-  part(group, 2.0, 0.7, 0.06, glass, 0, 1.7, 3.82);
-  part(group, 0.06, 0.55, 1.3, glass, -1.11, 1.7, 2.7);
-  part(group, 0.06, 0.55, 1.3, glass, 1.11, 1.7, 2.7);
-  const drumTilt = Math.PI / 2 - 0.12;
-  const drumAxis = new THREE.Vector3(0, Math.cos(drumTilt), Math.sin(drumTilt));
-  const drumCenter = new THREE.Vector3(0, 2.05, -1.0);
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.2, 4.0, 14), paint);
-  drum.position.copy(drumCenter);
-  drum.rotation.x = drumTilt;
-  drum.castShadow = true;
-  drum.receiveShadow = true;
-  group.add(drum);
-  for (const t of [-1.4, 0, 1.4]) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95 - 0.125 * t + 0.02, 0.055, 6, 18), steel);
-    ring.position.copy(drumCenter).addScaledVector(drumAxis, t);
-    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), drumAxis);
-    ring.castShadow = true;
-    group.add(ring);
-  }
-  const mouthGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.08, 16);
-  paintGeo(mouthGeo, TRIM_MAT.userData.defaultColor);
-  const mouth = new THREE.Mesh(mouthGeo, dark);
-  mouth.position.copy(drumCenter).addScaledVector(drumAxis, -2.02);
-  mouth.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), drumAxis);
-  mouth.castShadow = true;
-  group.add(mouth);
-  beam(group, [0, 1.1, 0.8], [0, 2.0, 0.2], 0.22, steel);
-  beam(group, [0, 1.1, -2.6], [0, 2.0, -2.2], 0.22, steel);
-  part(group, 1.2, 0.8, 0.8, steel, 0, 1.8, -3.1);
-  beam(group, [0, 1.6, -3.2], [0, 1.0, -3.8], 0.25, steel);
-  part(group, 2.4, 0.22, 0.16, dark, 0, 0.48, 3.84);
-  part(group, 2.4, 0.22, 0.16, dark, 0, 0.48, -3.9);
-  part(group, 0.3, 0.2, 0.06, glow(0xfff1cc, 0.7), -0.8, 0.8, 3.86);
-  part(group, 0.3, 0.2, 0.06, glow(0xfff1cc, 0.7), 0.8, 0.8, 3.86);
-  const tailL = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), -0.85, 0.82, -3.92);
-  const tailR = part(group, 0.28, 0.22, 0.06, glow(0xff2a2a, 0.35).clone(), 0.85, 0.82, -3.92);
-  addCarTrim(group, {
-    paint, dark, bodyColor: color,
-    halfW: 1.1, frontZ: 3.84, rearZ: -3.9, beltY: 1.43,
-    sillY: 0.55, bodyTopY: 2.25,
-    cabinFrontZ: 3.6, cabinRearZ: 2.05,
-    doors: 1,
-    exhaust: false,
-  });
-  addCabShell(group, {
-    halfW: 1.06, floorY: 0.68, roofY: 2.2,
-    frontZ: 3.76, backZ: 1.7,
-    windowBottomY: 1.43, windowTopY: 1.98,
-    glassHalfW: 1.0, glassBottomY: 1.36, glassTopY: 2.04,
-  });
-  const wheels = [
-    addWheel(group, -0.98, wheelY(1.25), 2.7, true, 1.25),
-    addWheel(group, 0.98, wheelY(1.25), 2.7, true, 1.25),
-    addWheel(group, -0.98, wheelY(1.25), -1.6, false, 1.25),
-    addWheel(group, 0.98, wheelY(1.25), -1.6, false, 1.25),
-    addWheel(group, -0.98, wheelY(1.25), -2.7, false, 1.25),
-    addWheel(group, 0.98, wheelY(1.25), -2.7, false, 1.25),
-  ];
-  addWheelArches(group, wheels, 1.1, color);
-  return { wheels, tails: [tailL, tailR], length: 7.8, width: 2.4, radius: 4.0 };
-}
-
 const BUILDERS = {
   sedan: buildSedan,
   taxi: buildSedan,
@@ -1364,11 +1268,9 @@ const BUILDERS = {
   van: buildVan,
   bus: buildBus,
   truck: buildTruck,
-  excavator: buildExcavator,
   ambulance: buildAmbulance,
   firetruck: buildFireTruck,
   police: buildPolice,
-  mixer: buildMixer,
 };
 
 export const VEHICLE_TYPES = Object.keys(BUILDERS);
@@ -1385,11 +1287,9 @@ export const VEHICLE_COLORS = {
   van: 0x2c3136,
   bus: 0x2f6b4f,
   truck: 0xc9c4b8,
-  excavator: 0xd9a520,
   ambulance: 0xf2f0e8,
   firetruck: 0xc02626,
   police: 0xf2f0e8,
-  mixer: 0xd9a520,
 };
 
 const footprints = new Map();

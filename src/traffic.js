@@ -310,7 +310,7 @@ export function createTraffic({
 
     // A traffic car that runs into street furniture throws it out of the way
     // too, so a prop that ends up in the lane does not just get driven
-    // through.
+    // through. A skip is not thrown: the car has to slow down for it.
     if (onHitProp && vehicle.speed > 1) {
       const blocker = vehicleBlockedBy(
         vehicle.x,
@@ -321,7 +321,12 @@ export function createTraffic({
         world.colliders,
         null,
       );
-      if (blocker && blocker.prop) onHitProp(vehicle, blocker.prop);
+      if (blocker && blocker.prop) {
+        const keep = onHitProp(vehicle, blocker.prop, dt);
+        if (keep !== null && keep !== undefined) {
+          vehicle.speed = Math.max(0, vehicle.speed * keep);
+        }
+      }
     }
   }
 

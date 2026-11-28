@@ -91,17 +91,18 @@ export class ColliderList extends Array {
   }
 
   // Takes a collider out of the index. It stays in the list itself, so the
-  // caller can put it back later, but nothing finds it any more: a prop that
-  // is in the air is not in the way of anything, and a collider that stayed in
-  // the grid would keep its old place like a fence standing in the street.
+  // caller can put it back later, but nothing finds it any more.
   hide(c) {
     this._drop(c);
   }
 
-  // Puts a hidden collider back into the grid, at the place it is now.
-  restore(c) {
+  // Puts a hidden collider back into the index, at the place it is now. A
+  // collider that is still on the move goes on the always-tested list
+  // instead of into a cell, because a cell remembers where a collider was put
+  // and a prop that is in the air right now will be somewhere else next frame.
+  restore(c, moving = false) {
     this._drop(c);
-    c.moving = false;
+    c.moving = !!moving;
     this._add(c);
   }
 

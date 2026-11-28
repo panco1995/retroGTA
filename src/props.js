@@ -64,6 +64,11 @@ export function buildHydrant({ x = 0, z = 0 } = {}) {
       launch: 0.85,
       lift: 0.16,
       drag: 0.22,
+      // A hydrant is small enough to go almost anywhere: it is thrown well
+      // off to the side, and a car that catches up with it only loses a
+      // little speed for the trouble.
+      side: 0.55,
+      push: 0.4,
       // The middle of the barrel, above the foot of it.
       at: [0, 0.24, 0],
       shapes: [
@@ -100,6 +105,10 @@ export function buildTrash({ x = 0, z = 0 } = {}) {
       launch: 1.05,
       lift: 0.2,
       drag: 0.05,
+      // A heap of bags skitters off to the side, and a car barely notices
+      // pushing it.
+      side: 0.7,
+      push: 0.15,
       // The middle of the heap, above the foot of it.
       at: [0, 0.16, 0],
       shapes: [
@@ -160,6 +169,10 @@ export function buildDumpster({ x = 0, z = 0, rot = 0 } = {}) {
       launch: 0.6,
       lift: 0.05,
       drag: 0.45,
+      // A skip is heavy and wide. It barely leaves the lane it was standing
+      // in, and shouldering it down the road costs the car real speed.
+      side: 0.12,
+      push: 1.6,
       // The middle of the box, above the foot of it.
       at: [0, 0.7, 0],
       shapes: [

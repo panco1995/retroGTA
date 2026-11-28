@@ -167,6 +167,23 @@ export function createGame(canvas) {
   let yaw = Math.PI;
   let pitch = 0.32;
   const scratch = [];
+  // The rectangle a prop is being thrown out of the way of. It is one object
+  // so the throw does not allocate on every contact.
+  const _mover = { x: 0, z: 0, y: 0, heading: 0, length: 0, width: 0, vehicle: null };
+
+  // Where the car that threw a prop is now, given the prop. The game owns the
+  // cars, so it is the one that knows. A prop with no car any more returns
+  // null.
+  function propCar(entry) {
+    const vehicle = entry.mover;
+    if (!vehicle) return null;
+    _mover.x = vehicle.x;
+    _mover.z = vehicle.z;
+    _mover.y = vehicle.y ?? 0;
+    _mover.heading = vehicle.heading;
+    return _mover;
+  }
+
   // The static obstacles: everything in the world that is not a vehicle. It is
   // a view, so each body only sees the obstacles around it.
   const staticCols = {
@@ -200,9 +217,9 @@ export function createGame(canvas) {
     getTarget: () => approach?.vehicle ?? null,
     onImpact: (a, b) => bounceVehicles(a, b),
     // An ambient car runs into the street furniture as well.
-    onHitProp: (vehicle, prop) => {
+    onHitProp: (vehicle, prop, dt) => {
       const [vx, vz] = vehicleVelocity(vehicle);
-      props.knock(prop, vx, vz);
+      return props.knock(prop, vx, vz, vehicle, dt);
     },
   });
 
@@ -577,13 +594,26 @@ export function createGame(canvas) {
   }
 
   // A car that runs into street furniture does not bounce off it: the rubbish
-  // bags, the hydrant and the dumpster are thrown out of the way instead.
+  // bags, the hydrant and the dumpster are thrown out of the way instead. A
+  // car that catches up with one that is still on the move shoves it along
+  // rather than driving through it.
+  //
+  // `atX` and `atZ` are the place the car has driven to, which is where the
+  // prop was found: the prop is put out of the way of that rectangle, not of
+  // the one the car was in before it stepped.
   // Returns the share of the car's speed that is left, or null when there was
   // nothing to throw.
-  function smashProp(vehicle, blocker) {
+  function smashProp(vehicle, blocker, dt, atX, atZ) {
     if (!blocker || !blocker.prop) return null;
     const [vx, vz] = vehicleVelocity(vehicle);
-    return props.knock(blocker.prop, vx, vz);
+    _mover.x = atX;
+    _mover.z = atZ;
+    _mover.y = vehicle.y ?? 0;
+    _mover.heading = vehicle.heading;
+    _mover.length = vehicle.length;
+    _mover.width = vehicle.width;
+    _mover.vehicle = vehicle;
+    return props.knock(blocker.prop, vx, vz, _mover, dt);
   }
 
   function hitVehicleAt(vehicle, x, z) {
@@ -730,7 +760,7 @@ export function createGame(canvas) {
         const other = hitVehicleAt(vehicle, nx, vehicle.z);
         if (other) bounceVehicles(vehicle, other);
         else {
-          const keep = smashProp(vehicle, blockX);
+          const keep = smashProp(vehicle, blockX, dt, nx, vehicle.z);
           if (keep === null) {
             vehicle.knockVX = -vx * 0.25;
             vehicle.bounce = Math.max(vehicle.bounce, 0.06);
@@ -750,7 +780,7 @@ export function createGame(canvas) {
         const other = hitVehicleAt(vehicle, vehicle.x, nz);
         if (other) bounceVehicles(vehicle, other);
         else {
-          const keep = smashProp(vehicle, blockZ);
+          const keep = smashProp(vehicle, blockZ, dt, vehicle.x, nz);
           if (keep === null) {
             vehicle.knockVZ = -vz * 0.25;
             vehicle.bounce = Math.max(vehicle.bounce, 0.06);
@@ -1419,7 +1449,7 @@ export function createGame(canvas) {
     else {
       hitCar = hitVehicleAt(hero, nx, hero.z);
       if (!hitCar) {
-        const keep = smashProp(hero, blockX);
+        const keep = smashProp(hero, blockX, dt, nx, hero.z);
         if (keep === null) {
           hero.speed *= -0.22;
           hero.bounce = Math.max(hero.bounce, 0.08);
@@ -1437,7 +1467,7 @@ export function createGame(canvas) {
       const car = hitVehicleAt(hero, hero.x, nz);
       if (car) hitCar = car;
       else if (!hitCar) {
-        const keep = smashProp(hero, blockZ);
+        const keep = smashProp(hero, blockZ, dt, hero.x, nz);
         if (keep === null) {
           hero.speed *= -0.22;
           hero.bounce = Math.max(hero.bounce, 0.08);
@@ -1946,7 +1976,9 @@ export function createGame(canvas) {
     // ragdoll's local pose is measured against where the actor already is.
     stepRagdolls(dt);
     // The street furniture that was thrown out of the way lands and settles.
-    props.step(dt);
+    // The car that threw each one is carried along with it, so the prop cannot
+    // turn back through a body the engine does not have.
+    props.step(dt, propCar);
     separatePeople();
     blood.update(dt);
     updateHud();

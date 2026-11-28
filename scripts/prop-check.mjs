@@ -1,6 +1,7 @@
 // Throws a pile of rubbish out of the way and checks that it lands, that it
 // keeps its shape, and that its collider follows it instead of standing
-// where it used to be.
+// where it used to be. A car that catches up with a prop on the move has to
+// push it rather than drive through it.
 //
 // Run with: npm run check
 
@@ -25,7 +26,7 @@ const THREE = await import('three');
 const { WALK_TOP } = await import('../src/config.js');
 const { buildDumpster, buildHydrant, buildTrash } = await import('../src/props.js');
 const { createPropPhysics } = await import('../src/prop-physics.js');
-const { vehicleBlocked } = await import('../src/collision.js');
+const { vehicleBlocked, vehicleBlockedBy } = await import('../src/collision.js');
 const { ColliderList } = await import('../src/spatial.js');
 
 let failures = 0;
@@ -58,6 +59,49 @@ function lowest(group) {
   return new THREE.Box3().setFromObject(group).min.y;
 }
 
+// How far the car and the prop overlap on the shallower axis. The car is
+// driven straight down +Z, so both boxes are axis aligned.
+function overlap(car, box) {
+  const ox = Math.min(car.width / 2, box.max.x) - Math.max(-car.width / 2, box.min.x);
+  const oz = Math.min(car.z + car.length / 2, box.max.z)
+    - Math.max(car.z - car.length / 2, box.min.z);
+  return Math.min(ox, oz);
+}
+
+// A car drives at the prop, using the same call the game makes: it looks for
+// a blocker where it is about to be, throws what it finds, and steps on. The
+// frame's own dt is handed over, so a slow frame cannot drive the car through
+// anything. Returns the worst overlap between the car and the prop.
+function driveInto(entry, props, colliders, group, speed, dt = 1 / 60, frames = 240) {
+  const car = { x: 0, z: -8, heading: 0, length: 4.45, width: 1.85, speed };
+  const mover = { x: 0, z: 0, heading: 0, length: car.length, width: car.width };
+  let worst = 0;
+  for (let f = 0; f < frames; f += 1) {
+    const vz = car.speed;
+    const nz = car.z + vz * dt;
+    const blocker = vehicleBlockedBy(car.x, nz, car.heading, car.length, car.width, colliders, null);
+    if (!blocker) {
+      car.z = nz;
+    } else if (blocker.prop) {
+      mover.x = car.x;
+      mover.z = nz;
+      const keep = props.knock(blocker.prop, 0, vz, mover, dt);
+      if (keep === null) car.speed *= -0.22;
+      else {
+        car.z = nz;
+        car.speed *= keep;
+      }
+    } else {
+      car.speed *= -0.22;
+    }
+    props.step(dt);
+    const box = new THREE.Box3().setFromObject(group);
+    const pen = overlap(car, box);
+    if (pen > worst) worst = pen;
+  }
+  return { worst, car };
+}
+
 // The rubbish bags.
 {
   const { colliders, props, group, collider, entry } = place(buildTrash, 0, 0);
@@ -67,8 +111,11 @@ function lowest(group) {
   // A car runs into it at speed.
   const keep = props.knock(entry, 14, 0);
   check('the heap is thrown', keep !== null && keep < 1, `car keeps ${keep?.toFixed(2)}`);
-  check('the heap leaves the index while it is in the air',
-    !colliders.near(0, 0, 1).includes(collider));
+  // It travels with the heap: a prop that was taken out of the index would
+  // leave a car with nothing to hit and the prop would be driven through.
+  check('the heap stays in the index while it is in the air',
+    colliders.near(0, 0, 1).includes(collider));
+  check('the heap is a moving collider while it flies', collider.moving === true);
 
   settle(props);
   const moved = Math.hypot(group.position.x, group.position.z);
@@ -77,12 +124,22 @@ function lowest(group) {
   check('the heap comes to rest', !entry.flying);
   check('the heap rests on the ground', Math.abs(lowest(group) - WALK_TOP) < 0.25,
     `lowest ${lowest(group).toFixed(2)}`);
+  check('the heap is back on a static cell when it rests', collider.moving === false);
 
-  // The collider has to be where the heap is, not where it stood.
+  // The collider has to be where the heap is, not where it stood. A heap that
+  // landed on its side is blocked by the box around it, whose middle is where
+  // the heap really is rather than where the foot of the group ended up.
+  const box = new THREE.Box3().setFromObject(group);
+  const midX = (box.min.x + box.max.x) / 2;
+  const midZ = (box.min.z + box.max.z) / 2;
   check('the collider follows the heap',
-    Math.abs(collider.x - group.position.x) < 0.01
-    && Math.abs(collider.z - group.position.z) < 0.01,
-    `collider ${collider.x.toFixed(2)},${collider.z.toFixed(2)} heap ${group.position.x.toFixed(2)},${group.position.z.toFixed(2)}`);
+    Math.abs(collider.x - midX) < 0.01 && Math.abs(collider.z - midZ) < 0.01,
+    `collider ${collider.x.toFixed(2)},${collider.z.toFixed(2)} heap ${midX.toFixed(2)},${midZ.toFixed(2)}`);
+  // The coarse mesh of a bag is a polygon, so its true box is a little
+  // smaller than the sphere the body is; the two agree to a few centimetres.
+  check('the collider is the heap\'s own box',
+    Math.abs(collider.minX - box.min.x) < 0.06 && Math.abs(collider.maxZ - box.max.z) < 0.06,
+    `collider ${collider.minX.toFixed(2)}..${collider.maxZ.toFixed(2)} heap ${box.min.x.toFixed(2)}..${box.max.z.toFixed(2)}`);
   check('the collider is found at the heap',
     colliders.near(group.position.x, group.position.z, 1).includes(collider));
   check('the old spot is clear for a car',
@@ -145,6 +202,63 @@ for (const [name, build] of [
     `prop ${thrown.toFixed(1)} m/s, car ${(carSpeed * keep).toFixed(1)} m/s`);
 }
 
+// A car that catches up with a prop on the move has to push it. The bag is
+// thrown, drops to the road, and then the car comes through behind it: the
+// car must not end up inside the prop on any frame.
+for (const [name, build] of [
+  ['the bags', buildTrash],
+  ['the hydrant', buildHydrant],
+  ['the dumpster', buildDumpster],
+]) {
+  const { colliders, props, group, entry } = place(build, 0, 0);
+  const { worst, car } = driveInto(entry, props, colliders, group, 12);
+  check(`${name} are not driven through`, worst < 0.12,
+    `worst overlap ${worst.toFixed(3)} m, car at ${car.z.toFixed(1)}`);
+}
+
+// A slow frame is the case that used to let the car sink in: the car moves
+// almost half a metre between two collision tests.
+{
+  const { colliders, props, group, entry } = place(buildDumpster, 0, 0);
+  const { worst } = driveInto(entry, props, colliders, group, 12, 1 / 30);
+  check('a slow frame does not drive through a skip', worst < 0.12,
+    `worst overlap ${worst.toFixed(3)} m`);
+}
+
+// A skip the car cannot throw is shouldered down the road. That must not keep
+// the prop in the air for ever: once the car stops, the skip has to come to
+// rest and go back into the index like any other.
+{
+  const { colliders, props, group, entry } = place(buildDumpster, 0, 0);
+  // The car keeps up with the skip but never faster than it can be pushed.
+  const car = { x: 0, z: -8, heading: 0, length: 4.45, width: 1.85, speed: 9 };
+  const mover = { x: 0, z: 0, y: 0, heading: 0, length: car.length, width: car.width };
+  const dt = 1 / 60;
+  let pushed = 0;
+  for (let f = 0; f < 420; f += 1) {
+    const nz = car.z + car.speed * dt;
+    const blocker = vehicleBlockedBy(car.x, nz, car.heading, car.length, car.width, colliders, null);
+    if (blocker && blocker.prop) {
+      mover.z = nz;
+      const keep = props.knock(blocker.prop, 0, car.speed, mover, dt);
+      if (keep !== null) {
+        car.z = nz;
+        car.speed *= keep;
+        pushed += 1;
+      }
+    } else if (!blocker) {
+      car.z = nz;
+    }
+    props.step(dt);
+  }
+  check('the skip is shouldered along', pushed > 5, `${pushed} contacts`);
+  // Seven seconds of shouldering is past the time limit, so the skip has to be
+  // on the ground and back in the index by now.
+  check('a shouldered skip is let go', !entry.flying);
+  check('a shouldered skip goes back into the index',
+    colliders.near(group.position.x, group.position.z, 1.5).includes(entry.collider));
+}
+
 // Everything goes back where it was.
 {
   const { colliders, props, group, collider, entry } = place(buildTrash, 0, 0);
@@ -156,6 +270,7 @@ for (const [name, build] of [
   check('the collider goes back with it',
     Math.abs(collider.x) < 0.01 && Math.abs(collider.z) < 0.01);
   check('the heap is in the index again', colliders.near(0, 0, 1).includes(collider));
+  check('the heap is a circle again after a reset', collider.circle === true);
 }
 
 console.log(failures === 0 ? 'OK' : `${failures} failures`);

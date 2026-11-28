@@ -4,7 +4,7 @@
 //
 // Run with: npm run check
 
-import { blocked, vehicleBlocked } from '../src/collision.js';
+import { blocked, moveCircle, vehicleBlocked } from '../src/collision.js';
 import { ColliderList } from '../src/spatial.js';
 
 let seed = 12345;
@@ -100,4 +100,49 @@ if (vehicleBlocked(20, 20, 0, 4, 2, solo, null)) {
 }
 
 console.log(`checked ${checked} queries, ${mismatches} mismatches`);
+
+// Walking into a wall has to slide along it, not stop dead against it.
+const R = 0.36;
+const wall = new ColliderList();
+wall.push({ minX: -20, maxX: 20, minZ: 0, maxZ: 1 });
+
+// A step that is half into the wall and half along it keeps the part along
+// it and drops the part into the wall.
+const slid = moveCircle(0, 1.36, 0.1, -0.1, R, wall);
+if (Math.abs(slid.x - 0.1) > 1e-6 || Math.abs(slid.z - 1.36) > 1e-6) {
+  mismatches += 1;
+  console.log('slide along a wall', slid.x.toFixed(3), slid.z.toFixed(3), 'want 0.100 1.360');
+}
+
+// A wall that is not square to the world: the body follows the wall, not
+// the axes.
+const turned = new ColliderList();
+turned.push({ obb: true, x: 0, z: 0, heading: Math.PI / 4, halfL: 10, halfW: 0.5 });
+const fx = Math.sin(Math.PI / 4);
+const fz = Math.cos(Math.PI / 4);
+const sx = Math.cos(Math.PI / 4);
+const sz = -Math.sin(Math.PI / 4);
+const from = [-0.8 * sx, -0.8 * sz];
+const turned2 = moveCircle(
+  from[0],
+  from[1],
+  0.4 * sx + 0.1 * fx,
+  0.4 * sz + 0.1 * fz,
+  R,
+  turned,
+);
+const along = (turned2.x - from[0]) * fx + (turned2.z - from[1]) * fz;
+const across = (turned2.x - from[0]) * sx + (turned2.z - from[1]) * sz;
+if (Math.abs(along - 0.1) > 1e-6 || across > 1e-6) {
+  mismatches += 1;
+  console.log('slide along a turned wall', along.toFixed(3), across.toFixed(3), 'want 0.100 and <= 0');
+}
+
+// A body that is wedged inside something climbs out of it.
+const wedged = moveCircle(0, 0.5, 0, -0.1, R, wall);
+if (blocked(wedged.x, wedged.z, R, wall)) {
+  mismatches += 1;
+  console.log('a body inside a wall stayed inside', wedged.x.toFixed(3), wedged.z.toFixed(3));
+}
+
 if (mismatches > 0) process.exit(1);

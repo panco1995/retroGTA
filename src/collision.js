@@ -180,10 +180,113 @@ export function blocked(x, z, radius, colliders) {
   return hasRegion && !inRegion;
 }
 
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+// A circle against an axis aligned box, in the box's own frame. The centre
+// can be inside the box, and then the way out is the nearest face.
+function boxContact(x, z, radius, minX, maxX, minZ, maxZ) {
+  const cx = clamp(x, minX, maxX);
+  const cz = clamp(z, minZ, maxZ);
+  const dx = x - cx;
+  const dz = z - cz;
+  const d2 = dx * dx + dz * dz;
+  if (d2 > radius * radius) return null;
+  if (d2 > 1e-9) {
+    const d = Math.sqrt(d2);
+    return { nx: dx / d, nz: dz / d, depth: radius - d };
+  }
+  const left = x - minX;
+  const right = maxX - x;
+  const near = z - minZ;
+  const far = maxZ - z;
+  const m = Math.min(left, right, near, far);
+  if (m === left) return { nx: -1, nz: 0, depth: left + radius };
+  if (m === right) return { nx: 1, nz: 0, depth: right + radius };
+  if (m === near) return { nx: 0, nz: -1, depth: near + radius };
+  return { nx: 0, nz: 1, depth: far + radius };
+}
+
+// How a circle touches a collider: the direction that pushes it clear and how
+// far it has to move to get out. Null when the two do not touch.
+export function circleContact(x, z, radius, c) {
+  if (c.circle) {
+    const dx = c.x - x;
+    const dz = c.z - z;
+    const d = Math.hypot(dx, dz);
+    const reach = radius + c.radius;
+    if (d >= reach) return null;
+    if (d < 1e-6) return { nx: 1, nz: 0, depth: reach };
+    return { nx: dx / d, nz: dz / d, depth: reach - d };
+  }
+  if (c.obb) {
+    // Into the box's own frame: forward along the body, sideways across it.
+    const fx = Math.sin(c.heading);
+    const fz = Math.cos(c.heading);
+    const rx = Math.cos(c.heading);
+    const rz = -Math.sin(c.heading);
+    const relX = x - c.x;
+    const relZ = z - c.z;
+    const hit = boxContact(
+      relX * fx + relZ * fz,
+      relX * rx + relZ * rz,
+      radius,
+      -c.halfL,
+      c.halfL,
+      -c.halfW,
+      c.halfW,
+    );
+    if (!hit) return null;
+    return {
+      nx: hit.nx * fx + hit.nz * rx,
+      nz: hit.nx * fz + hit.nz * rz,
+      depth: hit.depth,
+    };
+  }
+  return boxContact(x, z, radius, c.minX, c.maxX, c.minZ, c.maxZ);
+}
+
+// The deepest thing a circle is touching. That is the surface it has to
+// slide along.
+export function deepestContact(x, z, radius, colliders) {
+  const list = nearby(colliders, x, z, radius);
+  let best = null;
+  for (let i = 0; i < list.length; i += 1) {
+    const c = list[i];
+    if (c.keepInside) continue;
+    const hit = circleContact(x, z, radius, c);
+    if (hit && (!best || hit.depth > best.depth)) best = hit;
+  }
+  return best;
+}
+
 export function moveCircle(x, z, dx, dz, radius, colliders) {
-  let nx = x + dx;
-  if (blocked(nx, z, radius, colliders)) nx = x;
-  let nz = z + dz;
-  if (blocked(nx, nz, radius, colliders)) nz = z;
-  return { x: nx, z: nz };
+  const nx = x + dx;
+  const nz = z + dz;
+  if (!blocked(nx, nz, radius, colliders)) return { x: nx, z: nz };
+
+  // The step went into something. Slide along the surface it hit instead of
+  // stopping dead against it: step back out to the surface and keep the part
+  // of the step that runs along it.
+  const hit = deepestContact(nx, nz, radius, colliders);
+  if (hit) {
+    const sx = nx + hit.nx * hit.depth;
+    const sz = nz + hit.nz * hit.depth;
+    if (!blocked(sx, sz, radius, colliders)) return { x: sx, z: sz };
+  }
+
+  // A corner, or a surface the slide cannot reach: take whichever axis is
+  // still free.
+  if (!blocked(nx, z, radius, colliders)) return { x: nx, z: z };
+  if (!blocked(x, nz, radius, colliders)) return { x, z: nz };
+
+  // Wedged inside something: climb out of it.
+  const stuck = deepestContact(x, z, radius, colliders);
+  if (stuck && stuck.depth > 0) {
+    const ex = x + stuck.nx * stuck.depth;
+    const ez = z + stuck.nz * stuck.depth;
+    if (!blocked(ex, ez, radius, colliders)) return { x: ex, z: ez };
+  }
+  return { x, z };
 }

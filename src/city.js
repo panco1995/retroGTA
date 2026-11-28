@@ -68,6 +68,9 @@ function placeZ(spec, originZ = 0) {
 export function buildCity() {
   const group = new THREE.Group();
   const colliders = new ColliderList();
+  // The street furniture a car can throw out of the way. The game hands these
+  // to the physics engine, which does the throwing.
+  const knockables = [];
   const buildings = [];
   const roads = [];
   const stripes = [];
@@ -270,10 +273,11 @@ export function buildCity() {
   }
 
   function addDumpster(x, z, rot = 0) {
-    const { group: dump, collider } = buildDumpster({ x, z, rot });
+    const { group: dump, collider, body } = buildDumpster({ x, z, rot });
     dump.position.y = WALK_TOP + groundHeight(x, z);
     group.add(dump);
     colliders.push(collider);
+    if (body) knockables.push({ group: dump, collider, spec: body });
   }
 
   function addLamp(x, z, roadX, roadZ) {
@@ -711,17 +715,19 @@ export function buildCity() {
   }
 
   function addHydrant(x, z) {
-    const { group: hydrant, collider } = buildHydrant({ x, z });
+    const { group: hydrant, collider, body } = buildHydrant({ x, z });
     hydrant.position.y = WALK_TOP + groundHeight(x, z);
     group.add(hydrant);
     colliders.push(collider);
+    if (body) knockables.push({ group: hydrant, collider, spec: body });
   }
 
   function addTrash(x, z) {
-    const { group: trash, collider } = buildTrash({ x, z });
+    const { group: trash, collider, body } = buildTrash({ x, z });
     trash.position.y = WALK_TOP + groundHeight(x, z);
     group.add(trash);
     colliders.push(collider);
+    if (body) knockables.push({ group: trash, collider, spec: body });
   }
 
   function addEl() {
@@ -946,6 +952,7 @@ export function buildCity() {
   return {
     group,
     colliders,
+    knockables,
     buildings,
     roads,
     vehicles,

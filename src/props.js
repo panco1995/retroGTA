@@ -55,7 +55,23 @@ export function buildHydrant({ x = 0, z = 0 } = {}) {
     group.add(nozzle);
   }
   group.position.set(x, 0, z);
-  return { group, collider: { circle: true, x, z, radius: 0.2 } };
+  // A hydrant is heavy, but a car still sends it flying.
+  return {
+    group,
+    collider: { circle: true, x, z, radius: 0.2 },
+    body: {
+      mass: 32,
+      launch: 0.85,
+      lift: 0.16,
+      drag: 0.22,
+      // The middle of the barrel, above the foot of it.
+      at: [0, 0.24, 0],
+      shapes: [
+        { type: 'cylinder', radius: 0.15, height: 0.48, at: [0, 0, 0] },
+        { type: 'sphere', radius: 0.14, at: [0, 0.28, 0] },
+      ],
+    },
+  };
 }
 
 // Three rubbish bags, heaped on the pavement.
@@ -72,7 +88,27 @@ export function buildTrash({ x = 0, z = 0 } = {}) {
     group.add(bag);
   }
   group.position.set(x, 0, z);
-  return { group, collider: { circle: true, x, z, radius: 0.4 } };
+  // The bags are light enough for a car to throw them out of the way.
+  return {
+    group,
+    collider: { circle: true, x, z, radius: 0.4 },
+    body: {
+      mass: 12,
+      // The share of the car's speed the heap takes off with, how high it
+      // pops, and how much of the car's speed it takes away. The heap goes
+      // faster than the car that hit it, so it clears out of the way.
+      launch: 1.05,
+      lift: 0.2,
+      drag: 0.05,
+      // The middle of the heap, above the foot of it.
+      at: [0, 0.16, 0],
+      shapes: [
+        { type: 'sphere', radius: 0.18, at: [-0.28, 0, -0.12] },
+        { type: 'sphere', radius: 0.23, at: [0, 0, 0] },
+        { type: 'sphere', radius: 0.18, at: [0.28, 0, 0.12] },
+      ],
+    },
+  };
 }
 
 // A street tree: a trunk under a canopy.
@@ -115,5 +151,21 @@ export function buildDumpster({ x = 0, z = 0, rot = 0 } = {}) {
   group.rotation.y = rot;
   // The body is 1.7 across and 1.05 deep, and the collider has to follow the
   // rotation instead of pretending the box is axis aligned.
-  return { group, collider: { obb: true, x, z, heading: rot, halfL: 0.53, halfW: 0.85 } };
+  // A dumpster is too heavy to be thrown, but a car still shoves it along.
+  return {
+    group,
+    collider: { obb: true, x, z, heading: rot, halfL: 0.53, halfW: 0.85 },
+    body: {
+      mass: 80,
+      launch: 0.6,
+      lift: 0.05,
+      drag: 0.45,
+      // The middle of the box, above the foot of it.
+      at: [0, 0.7, 0],
+      shapes: [
+        { type: 'box', half: [0.85, 0.575, 0.525], at: [0, 0, 0] },
+        { type: 'box', half: [0.89, 0.04, 0.56], at: [0, 0.6, 0], rot: [-0.15, 0, 0] },
+      ],
+    },
+  };
 }

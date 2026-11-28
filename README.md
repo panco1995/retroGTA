@@ -183,6 +183,8 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/config.js` | Metrics exported from the map file, plus a stable hash |
 | `src/actor.js` | Person model: each joint merged into one mesh with its colour baked into vertex attributes, so the whole cast shares one material; walk, seated and knocked-down poses with knee and elbow joints |
 | `src/ragdoll.js` | The ragdoll: a knocked down person hands every joint to a physics engine, the joints are held together by constraints, and the pose it lands in is kept for the get up |
+| `src/physics.js` | The shared part of the physics engine: the world setup, and the walls built around a body while it falls |
+| `src/prop-physics.js` | Street furniture a car throws out of the way: the rubbish bags, the hydrant and the skip are handed to a physics engine and settle where they land; the collider travels with the prop, so nothing is left standing in the street |
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |

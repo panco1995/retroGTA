@@ -90,6 +90,21 @@ export class ColliderList extends Array {
     return removed;
   }
 
+  // Takes a collider out of the index. It stays in the list itself, so the
+  // caller can put it back later, but nothing finds it any more: a prop that
+  // is in the air is not in the way of anything, and a collider that stayed in
+  // the grid would keep its old place like a fence standing in the street.
+  hide(c) {
+    this._drop(c);
+  }
+
+  // Puts a hidden collider back into the grid, at the place it is now.
+  restore(c) {
+    this._drop(c);
+    c.moving = false;
+    this._add(c);
+  }
+
   // The colliders that could touch a circle at (x, z). The returned array is
   // reused between calls, so consume it before asking again.
   near(x, z, radius) {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { colorOf } from './config.js';
 import { createVehicle } from './vehicle.js';
-import { blocked, obbHitsObb } from './collision.js';
+import { blocked, obbHitsObb, vehicleBlockedBy } from './collision.js';
 
 // Ambient cars circle the city blocks on the same lane network the city
 // builds. Like the pedestrian crowd, they only spawn and despawn off camera.
@@ -66,7 +66,7 @@ function headingAt(loop, distance, ahead = 2.2) {
 }
 
 export function createTraffic({
-  scene, world, camera, getFocus, getTarget, onImpact,
+  scene, world, camera, getFocus, getTarget, onImpact, onHitProp,
 }) {
   const loops = world.trafficLoops ?? [];
   const slots = [];
@@ -307,6 +307,22 @@ export function createTraffic({
     );
     vehicle.pitch = -Math.atan2(nose - vehicle.y, 3);
     vehicle.collider();
+
+    // A traffic car that runs into street furniture throws it out of the way
+    // too, so a prop that ends up in the lane does not just get driven
+    // through.
+    if (onHitProp && vehicle.speed > 1) {
+      const blocker = vehicleBlockedBy(
+        vehicle.x,
+        vehicle.z,
+        vehicle.heading,
+        vehicle.length,
+        vehicle.width,
+        world.colliders,
+        null,
+      );
+      if (blocker && blocker.prop) onHitProp(vehicle, blocker.prop);
+    }
   }
 
   function update(dt) {

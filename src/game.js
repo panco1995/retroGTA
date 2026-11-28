@@ -9,12 +9,13 @@ import {
   nearby,
   obbHitsCircle,
   obbHitsObb,
-  vehicleBlocked,
+  vehicleBlockedBy,
 } from './collision.js';
 import { ATTACK_TIME, animateActor, createActor, setPose } from './actor.js';
 import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
+import { createPropPhysics } from './prop-physics.js';
 import { releaseRagdoll, startRagdoll, stepRagdolls } from './ragdoll.js';
 import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
@@ -96,6 +97,10 @@ export function createGame(canvas) {
 
   const world = buildCity();
   scene.add(world.group);
+
+  // The street furniture a car can throw out of the way.
+  const props = createPropPhysics({ colliders: world.colliders, ground: world.ground });
+  for (const entry of world.knockables) props.register(entry);
 
   const spawn = world.spawn;
   const player = createActor({
@@ -194,6 +199,11 @@ export function createGame(canvas) {
     getFocus: () => (mode === 'drive' ? hero : player),
     getTarget: () => approach?.vehicle ?? null,
     onImpact: (a, b) => bounceVehicles(a, b),
+    // An ambient car runs into the street furniture as well.
+    onHitProp: (vehicle, prop) => {
+      const [vx, vz] = vehicleVelocity(vehicle);
+      props.knock(prop, vx, vz);
+    },
   });
 
   const speedEl = document.getElementById('speed');
@@ -508,6 +518,7 @@ export function createGame(canvas) {
     crowd.reset();
     traffic.reset();
     world.reset();
+    props.reset();
     hintTime = 12;
     input.release();
   }
@@ -552,8 +563,9 @@ export function createGame(canvas) {
     if (currentPage().page === 'map') closeMap();
   }
 
-  function carHits(vehicle, x, z) {
-    return vehicleBlocked(
+  // The collider that would stop the car at this spot, if anything would.
+  function carBlocker(vehicle, x, z) {
+    return vehicleBlockedBy(
       x,
       z,
       vehicle.heading,
@@ -562,6 +574,16 @@ export function createGame(canvas) {
       world.colliders,
       null,
     );
+  }
+
+  // A car that runs into street furniture does not bounce off it: the rubbish
+  // bags, the hydrant and the dumpster are thrown out of the way instead.
+  // Returns the share of the car's speed that is left, or null when there was
+  // nothing to throw.
+  function smashProp(vehicle, blocker) {
+    if (!blocker || !blocker.prop) return null;
+    const [vx, vz] = vehicleVelocity(vehicle);
+    return props.knock(blocker.prop, vx, vz);
   }
 
   function hitVehicleAt(vehicle, x, z) {
@@ -699,25 +721,43 @@ export function createGame(canvas) {
       }
       knockCols.vehicle = vehicle;
       const nx = vehicle.x + vx * dt;
-      if (!vehicleBlocked(nx, vehicle.z, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
+      const blockX = vehicleBlockedBy(
+        nx, vehicle.z, vehicle.heading, vehicle.length, vehicle.width, knockCols, null,
+      );
+      if (!blockX) {
         vehicle.x = nx;
       } else {
         const other = hitVehicleAt(vehicle, nx, vehicle.z);
         if (other) bounceVehicles(vehicle, other);
         else {
-          vehicle.knockVX = -vx * 0.25;
-          vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+          const keep = smashProp(vehicle, blockX);
+          if (keep === null) {
+            vehicle.knockVX = -vx * 0.25;
+            vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+          } else {
+            vehicle.x = nx;
+            vehicle.knockVX *= keep;
+          }
         }
       }
       const nz = vehicle.z + vz * dt;
-      if (!vehicleBlocked(vehicle.x, nz, vehicle.heading, vehicle.length, vehicle.width, knockCols, null)) {
+      const blockZ = vehicleBlockedBy(
+        vehicle.x, nz, vehicle.heading, vehicle.length, vehicle.width, knockCols, null,
+      );
+      if (!blockZ) {
         vehicle.z = nz;
       } else {
         const other = hitVehicleAt(vehicle, vehicle.x, nz);
         if (other) bounceVehicles(vehicle, other);
         else {
-          vehicle.knockVZ = -vz * 0.25;
-          vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+          const keep = smashProp(vehicle, blockZ);
+          if (keep === null) {
+            vehicle.knockVZ = -vz * 0.25;
+            vehicle.bounce = Math.max(vehicle.bounce, 0.06);
+          } else {
+            vehicle.z = nz;
+            vehicle.knockVZ *= keep;
+          }
         }
       }
       vehicle.heading += spin * dt;
@@ -1374,21 +1414,38 @@ export function createGame(canvas) {
     const nx = hero.x + vx * dt;
     const nz = hero.z + vz * dt;
     let hitCar = null;
-    if (!carHits(hero, nx, hero.z)) hero.x = nx;
+    const blockX = carBlocker(hero, nx, hero.z);
+    if (!blockX) hero.x = nx;
     else {
       hitCar = hitVehicleAt(hero, nx, hero.z);
       if (!hitCar) {
-        hero.speed *= -0.22;
-        hero.bounce = Math.max(hero.bounce, 0.08);
+        const keep = smashProp(hero, blockX);
+        if (keep === null) {
+          hero.speed *= -0.22;
+          hero.bounce = Math.max(hero.bounce, 0.08);
+        } else {
+          // The furniture is out of the way, so the car drives on through it.
+          hero.x = nx;
+          hero.speed *= keep;
+          hero.bounce = Math.max(hero.bounce, 0.05);
+        }
       }
     }
-    if (!carHits(hero, hero.x, nz)) hero.z = nz;
+    const blockZ = carBlocker(hero, hero.x, nz);
+    if (!blockZ) hero.z = nz;
     else {
       const car = hitVehicleAt(hero, hero.x, nz);
       if (car) hitCar = car;
       else if (!hitCar) {
-        hero.speed *= -0.22;
-        hero.bounce = Math.max(hero.bounce, 0.08);
+        const keep = smashProp(hero, blockZ);
+        if (keep === null) {
+          hero.speed *= -0.22;
+          hero.bounce = Math.max(hero.bounce, 0.08);
+        } else {
+          hero.z = nz;
+          hero.speed *= keep;
+          hero.bounce = Math.max(hero.bounce, 0.05);
+        }
       }
     }
     if (hitCar) impactVehicle(hitCar);
@@ -1888,6 +1945,8 @@ export function createGame(canvas) {
     // The bodies are placed before the engine writes its result, so the
     // ragdoll's local pose is measured against where the actor already is.
     stepRagdolls(dt);
+    // The street furniture that was thrown out of the way lands and settles.
+    props.step(dt);
     separatePeople();
     blood.update(dt);
     updateHud();

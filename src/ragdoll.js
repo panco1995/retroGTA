@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { nearby } from './collision.js';
+import { buildGround, buildWalls, createWorld } from './physics.js';
 
 const THIGH_LEN = 0.44;
 const SHIN_LEN = 0.38;
@@ -22,23 +22,12 @@ const MAX_TIME = 9;
 const REST_SPEED = 0.4;
 // How long it has to stay still before it is frozen.
 const REST_TIME = 0.5;
-// How far around the body the walls are built.
-const WALL_REACH = 4.5;
-// How tall those walls are.
-const WALL_HEIGHT = 6;
 
 let engine = null;
 const live = new Set();
 
 function physics() {
-  if (!engine) {
-    engine = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-    engine.broadphase = new CANNON.SAPBroadphase(engine);
-    engine.allowSleep = true;
-    engine.solver.iterations = 12;
-    engine.defaultContactMaterial.friction = 0.55;
-    engine.defaultContactMaterial.restitution = 0.04;
-  }
+  if (!engine) engine = createWorld();
   return engine;
 }
 
@@ -141,46 +130,8 @@ export function startRagdoll(actor, opts = {}) {
 
   // The ground it lands on, and the walls it lands against.
   const groundY = opts.groundY ?? 0;
-  const ground = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
-  ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  ground.position.set(0, groundY, 0);
-  world.addBody(ground);
-  statics.push(ground);
-
-  for (const c of nearby(opts.colliders, opts.x ?? 0, opts.z ?? 0, WALL_REACH)) {
-    if (c.keepInside) continue;
-    let wall = null;
-    if (c.obb) {
-      wall = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Box(new CANNON.Vec3(c.halfW, WALL_HEIGHT / 2, c.halfL)),
-      });
-      wall.quaternion.setFromEuler(0, c.heading, 0);
-      wall.position.set(c.x, groundY + WALL_HEIGHT / 2, c.z);
-    } else if (c.circle) {
-      wall = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Cylinder(c.radius, c.radius, WALL_HEIGHT, 10),
-      });
-      wall.position.set(c.x, groundY + WALL_HEIGHT / 2, c.z);
-    } else {
-      wall = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Box(new CANNON.Vec3(
-          (c.maxX - c.minX) / 2,
-          WALL_HEIGHT / 2,
-          (c.maxZ - c.minZ) / 2,
-        )),
-      });
-      wall.position.set(
-        (c.minX + c.maxX) / 2,
-        groundY + WALL_HEIGHT / 2,
-        (c.minZ + c.maxZ) / 2,
-      );
-    }
-    world.addBody(wall);
-    statics.push(wall);
-  }
+  statics.push(buildGround(world, groundY));
+  statics.push(...buildWalls(world, opts.colliders, opts.x ?? 0, opts.z ?? 0, groundY));
 
   // The hit throws the body along the ground and into the air.
   const vx = opts.vx ?? 0;

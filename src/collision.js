@@ -119,7 +119,12 @@ export function circleExitsFromObb(x, z, radius, ox, oz, heading, halfL, halfW) 
   }));
 }
 
-export function vehicleBlocked(x, z, heading, length, width, colliders, circles) {
+// The island edge is a rule, not an object, so there is no collider to hand
+// back for it. It still stops the car.
+const REGION = { region: true };
+
+// The collider that stops a car, if one does.
+function blockerFor(x, z, heading, length, width, colliders, circles) {
   const halfL = length / 2;
   const halfW = width / 2;
   const fx = Math.sin(heading);
@@ -129,23 +134,34 @@ export function vehicleBlocked(x, z, heading, length, width, colliders, circles)
   const list = nearby(colliders, x, z, halfL + halfW);
   if (outOfRegion(x, z, list)
     || outOfRegion(x + fx * halfL, z + fz * halfL, list)
-    || outOfRegion(x - fx * halfL, z - fz * halfL, list)) return true;
+    || outOfRegion(x - fx * halfL, z - fz * halfL, list)) return REGION;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.keepInside) continue;
     if (c.obb) {
-      if (obbHitsObb(x, z, heading, halfL, halfW, c.x, c.z, c.heading, c.halfL, c.halfW)) return true;
+      if (obbHitsObb(x, z, heading, halfL, halfW, c.x, c.z, c.heading, c.halfL, c.halfW)) return c;
     } else if (c.circle) {
-      if (obbHitsCircle(x, z, heading, halfL, halfW, c.x, c.z, c.radius)) return true;
-    } else if (obbHitsAabb(x, z, heading, halfL, halfW, c)) return true;
+      if (obbHitsCircle(x, z, heading, halfL, halfW, c.x, c.z, c.radius)) return c;
+    } else if (obbHitsAabb(x, z, heading, halfL, halfW, c)) return c;
   }
   if (circles) {
     for (let i = 0; i < circles.length; i++) {
       const body = circles[i];
-      if (obbHitsCircle(x, z, heading, halfL, halfW, body.x, body.z, body.radius || 0.36)) return true;
+      if (obbHitsCircle(x, z, heading, halfL, halfW, body.x, body.z, body.radius || 0.36)) return body;
     }
   }
-  return false;
+  return null;
+}
+
+export function vehicleBlocked(x, z, heading, length, width, colliders, circles) {
+  return blockerFor(x, z, heading, length, width, colliders, circles) !== null;
+}
+
+// The collider that stops the car, so a caller can tell a wall from a piece
+// of street furniture it could throw out of the way instead of bouncing off.
+export function vehicleBlockedBy(x, z, heading, length, width, colliders, circles) {
+  const blocker = blockerFor(x, z, heading, length, width, colliders, circles);
+  return blocker === REGION ? null : blocker;
 }
 
 export function blocked(x, z, radius, colliders) {

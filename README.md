@@ -18,8 +18,8 @@ Follow camera and the fixed 2.5D camera, on the street outside the safehouse.
 - Walk, run, jump, throw a punch, enter a vehicle from either side, drive, and brake
 - Four cameras: follow, first-person, top-down, and 2.5D
 - Pedestrians: hand-placed walkers from the map, plus a streamed crowd of 12 kinds that walks the sidewalk network, waits for traffic, dodges cars, chats, and idles. People do not walk through each other
-- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield. Traffic cars with clear glass carry a driver you can see inside
-- Vehicle cabins: passenger cars have a lined cabin with seats, a dashboard and a steering wheel, and clear glass, so the interior reads from outside. Box-bodied vans, buses and trucks keep their tinted panes. Taking a car hides the NPC driver and puts the player in the seat
+- Ambient traffic: cars drive right-hand lanes around city blocks, follow each other, and can be carjacked. A car is heavier than a person and does not yield. Every traffic car carries a driver you can see inside
+- Vehicle cabins: every vehicle has a lined cabin with seats, a dashboard and a steering wheel, and clear glass, so the interior reads from outside. The box-bodied vans, buses and trucks get there the same way the cars do: their body is a shell of panels with the windows cut out of it. Taking a car hides the NPC driver and puts the player in the seat, sitting on that vehicle's cushion with their head under its roof
 - Building and vehicle-body collision. A stopped car is solid. A body that hits something slides along it instead of sticking to it, and one that ends up wedged inside climbs back out. Cars transfer momentum to people too: a light touch nudges them aside, a faster hit knocks them down, bleeds and slides them along the road, and only a hard hit at speed kills. People and cars follow the ground height and stay on walkable ground
 - A person who is knocked down really falls: the body goes to a physics engine, the joints are held together by constraints, it hits the walls and tumbles, settles where it lands, and gets back up from that pose
 - Momentum in car crashes: any two cars that touch exchange momentum by closing speed and mass ratio. Parked cars slide until friction or a wall stops them, traffic is knocked off its lane and recovers, and the player's car loses speed in proportion to what it hit
@@ -138,7 +138,9 @@ Set the type with `vehicles[].type`. All builders live in `src/vehicle.js`; unkn
 | `firetruck` | Fire truck | Red body, equipment box, roof ladder, light bar, six wheels |
 | `police` | Police car | Blue-and-white livery with a red/blue roof light bar |
 
-Passenger cars have clear glass, so their seats and the driver show from outside. The box-bodied vans, buses and trucks keep tinted panes: their body is a solid shell, so there is no cabin behind the glass to show.
+Every vehicle has clear glass, so their seats and the driver show from outside. The box-bodied vans, buses and trucks are built as a shell of panels with the window openings cut out of it, so the glass sits in a real hole with the cabin behind it, the same as a car.
+
+Each vehicle also declares the size of its collision box, and the driver's seat. The seat is what puts the player in the right place: the character sits on the cushion of the vehicle it got into, so it fits under the roof instead of hanging out of it.
 
 To add a type, write a builder in `src/vehicle.js`, register it in `BUILDERS`, and set the matching `type` on an entry in `data/saint-marks.json`.
 

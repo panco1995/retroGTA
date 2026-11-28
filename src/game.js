@@ -493,6 +493,8 @@ export function createGame(canvas) {
     if (mode === 'drive') {
       scene.attach(player.group);
       setPose(player, 'stand');
+      player.parts.leftLeg.visible = true;
+      player.parts.rightLeg.visible = true;
     }
     mode = 'foot';
     setView('follow');
@@ -1230,9 +1232,15 @@ export function createGame(canvas) {
     hero.group.attach(player.group);
     // The NPC who was behind the wheel gives up the seat to the player.
     if (hero.driver) hero.driver.visible = false;
-    player.group.position.set(-0.36, 0.22, -0.15);
+    // The character takes the seat of whichever vehicle it gets into, so it
+    // sits on the cushion of that vehicle instead of in mid air.
+    player.group.position.set(hero.seat.hip.x, hero.seat.hip.y, hero.seat.hip.z);
     player.group.rotation.set(0, 0, 0);
     setPose(player, 'sit');
+    // The legs are inside the car bodywork, where the floor would cut them
+    // off, so they are left out while the character drives.
+    player.parts.leftLeg.visible = false;
+    player.parts.rightLeg.visible = false;
     hero.speed = 0;
     if (view === 'first') {
       yaw = hero.heading;
@@ -1277,6 +1285,8 @@ export function createGame(canvas) {
     player.group.position.set(spot.x, WALK_TOP + world.ground(spot.x, spot.z), spot.z);
     player.group.rotation.set(0, player.heading, 0);
     setPose(player, 'stand');
+    player.parts.leftLeg.visible = true;
+    player.parts.rightLeg.visible = true;
     vehicle.speed = 0;
     vehicle.braking = false;
     // The parked car becomes solid again once the character is out.

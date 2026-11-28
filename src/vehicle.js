@@ -21,17 +21,10 @@ const TRIM_MAT = new THREE.MeshStandardMaterial({
 });
 TRIM_MAT.userData.defaultColor = 0x141618;
 
-const GLASS_MAT = new THREE.MeshStandardMaterial({
-  vertexColors: true,
-  roughness: 0.1,
-  metalness: 0.25,
-  side: THREE.DoubleSide,
-});
-GLASS_MAT.userData.defaultColor = 0x3a4a55;
-
-// The panes of a passenger car's greenhouse are see-through, so the seats and
-// the driver show from outside. Box bodied vehicles keep GLASS_MAT: their body
-// is a solid shell, so there is no cabin behind those panes to show.
+// The glass of every vehicle is see-through, so the seats and the driver show
+// from outside. A box bodied van, bus or truck gets there the same way a car
+// does: its body is a shell of panels with the windows cut out of it, so the
+// glass sits in a real hole with the cabin behind it.
 const CABIN_GLASS_MAT = new THREE.MeshStandardMaterial({
   vertexColors: true,
   roughness: 0.08,
@@ -51,6 +44,15 @@ const SCREEN_GLASS = 0x465964;
 // Shut lines and window rubber are near black on every car, so gaps read as
 // depth rather than as one more painted stripe.
 const GROOVE_COLOR = 0x0f1114;
+
+// The driver's eyes sit this far above the seat cushion. A seated character
+// is a torso and a head, so the eyes land in the head and the camera looks
+// out between the eyebrows.
+const EYE_OVER_CUSHION = 0.52;
+// The hips of a seated character sit this far above its origin, which is
+// where the feet would be. The lower body is inside the car bodywork, so it
+// is hidden while the character drives.
+const SEATED_HIP = 0.56;
 
 function paintGeo(geo, color) {
   const c = new THREE.Color(color);
@@ -403,6 +405,68 @@ function addCarBody(group, paint, {
   }
 }
 
+// A wall panel with rectangular openings cut into it. The wall runs from
+// `from` to `to` along its length and from `low` to `high` up; each opening
+// is a hole punched through the panel. The wall is built as the solid
+// stretches between the holes, so the glass in a hole is a real window and
+// not a dark panel stuck on the paint.
+function holedWall(group, mat, {
+  plane, at, thickness, from, to, low, high, openings = [], color,
+}) {
+  const slab = (a, b, y0, y1) => {
+    if (b - a <= 0.002 || y1 - y0 <= 0.002) return;
+    const mid = (a + b) / 2;
+    const yc = (y0 + y1) / 2;
+    if (plane === 'xy') {
+      part(group, b - a, y1 - y0, thickness, mat, mid, yc, at, color);
+    } else {
+      part(group, thickness, y1 - y0, b - a, mat, at, yc, mid, color);
+    }
+  };
+  let cursor = from;
+  for (const hole of [...openings].sort((a, b) => a.from - b.from)) {
+    const a = Math.max(hole.from, from);
+    const b = Math.min(hole.to, to);
+    if (b <= a) continue;
+    slab(cursor, a, low, high);
+    slab(a, b, low, hole.low);
+    slab(a, b, hole.high, high);
+    cursor = b;
+  }
+  slab(cursor, to, low, high);
+}
+
+// The painted shell of a box bodied vehicle: six panels with the window
+// openings cut into them. Building the shell out of panels instead of one
+// solid block is what lets the glass be a real window with the cabin behind
+// it, instead of a dark panel stuck on the outside of a lump of metal.
+function addBoxSkin(group, paint, {
+  halfW, bottom, top, frontZ, backZ, wall = 0.06,
+  front = null, back = null, sides = null,
+}) {
+  const depth = frontZ - backZ;
+  const zMid = (frontZ + backZ) / 2;
+  part(group, halfW * 2, wall, depth, paint, 0, top - wall / 2, zMid);
+  part(group, halfW * 2, wall, depth, paint, 0, bottom + wall / 2, zMid);
+  holedWall(group, paint, {
+    plane: 'xy', at: frontZ - wall / 2, thickness: wall,
+    from: -halfW, to: halfW, low: bottom, high: top,
+    openings: front ? [front] : [],
+  });
+  holedWall(group, paint, {
+    plane: 'xy', at: backZ + wall / 2, thickness: wall,
+    from: -halfW, to: halfW, low: bottom, high: top,
+    openings: back ? [back] : [],
+  });
+  for (const side of [-1, 1]) {
+    holedWall(group, paint, {
+      plane: 'zy', at: side * (halfW - wall / 2), thickness: wall,
+      from: backZ, to: frontZ, low: bottom, high: top,
+      openings: sides ? [sides] : [],
+    });
+  }
+}
+
 function addGreenhouse(group, {
   paint,
   bodyColor,
@@ -611,16 +675,16 @@ function frameSideWindow(group, side, x, y, z, h, d, color) {
 // seat: a wheel at arm's length instead of against the lens, with a shallow
 // dash and a column behind it.
 function addCabinInterior(group, mat, built, seat) {
-  const eyeY = seat.y;
+  const cushionY = seat.cushion;
   // Run the dash from just behind the wheel to the firewall, so it reads as a
   // full-width dashboard rather than a slab floating mid-cabin.
   const dashFront = (group.userData.cabinFrontZ ?? seat.z + 0.8) - 0.08;
   const dashBack = seat.z + 0.55;
   const dashDepth = Math.max(0.12, dashFront - dashBack);
-  part(group, built.width * 0.8, 0.16, dashDepth, mat, 0, eyeY - 0.31, (dashFront + dashBack) / 2, 0x2f353a);
+  part(group, built.width * 0.8, 0.16, dashDepth, mat, 0, cushionY + 0.21, (dashFront + dashBack) / 2, 0x2f353a);
 
   const hub = new THREE.Group();
-  hub.position.set(seat.x, eyeY - 0.3, seat.z + 0.48);
+  hub.position.set(seat.x, cushionY + 0.22, seat.z + 0.48);
   hub.rotation.x = 0.35;
   const spin = new THREE.Group();
   const rim = new THREE.TorusGeometry(0.16, 0.026, 6, 14);
@@ -635,13 +699,13 @@ function addCabinInterior(group, mat, built, seat) {
   group.add(hub);
 
   // Column from the wheel back to the dash.
-  part(group, 0.07, 0.07, 0.16, mat, seat.x, eyeY - 0.33, seat.z + 0.53, 0x24292e);
+  part(group, 0.07, 0.07, 0.16, mat, seat.x, cushionY + 0.19, seat.z + 0.53, 0x24292e);
 
   // Driver and passenger seats, with a pedestal down to the cabin floor, plus
   // a low console between them. The floor comes from the cabin lining built by
   // the greenhouse (cars) or the cab shell (vans, buses, trucks).
-  const floorY = group.userData.cabinFloorY ?? eyeY - 0.72;
-  const cushionTop = eyeY - 0.4;
+  const floorY = group.userData.cabinFloorY ?? cushionY - 0.2;
+  const cushionTop = cushionY;
   const cushionH = 0.15;
   const cushionBottom = cushionTop - cushionH;
   const passengerX = seat.x === 0 ? 0.36 : -seat.x;
@@ -671,6 +735,7 @@ function addSeatedDriver(group, seat) {
   const shirt = pick(DRIVER_SHIRTS);
   const x = seat.x;
   const eye = seat.y;
+  const hip = seat.cushion;
   const z = seat.z;
   const geos = [];
   const box = (w, h, d, ox, oy, oz, color) => {
@@ -679,9 +744,9 @@ function addSeatedDriver(group, seat) {
     geo.translate(ox, oy, oz);
     geos.push(geo);
   };
-  // The seat height is the camera eye, so the head starts at eye level and
+  // The driver sits on the cushion and the head starts at eye level, so he
   // stays under the roof even in the low sports car. Torso, shoulders, neck.
-  box(0.42, 0.46, 0.26, x, eye - 0.42, z - 0.16, shirt);
+  box(0.42, 0.33, 0.26, x, hip + 0.165, z - 0.16, shirt);
   box(0.46, 0.12, 0.28, x, eye - 0.19, z - 0.18, shirt);
   box(0.1, 0.08, 0.1, x, eye - 0.09, z - 0.16, skin);
   // Head and hair, with a cap on some of them for variety.
@@ -754,6 +819,9 @@ function addCabShell(group, spec) {
   }
   group.userData.cabinFloorY = floorY;
   group.userData.cabinFrontZ = frontZ;
+  // The glass in a box bodied cab is clear, so this one can carry a
+  // visible driver too.
+  group.userData.seeThrough = true;
 }
 
 function buildSedan(group, color, taxi) {
@@ -801,7 +869,12 @@ function buildSedan(group, color, taxi) {
     addWheel(group, 0.82, wheelY(), -1.38, false),
   ];
   addWheelArches(group, wheels, 0.89, color);
-  return { wheels, tails: [tailL, tailR], length: 4.45, width: 1.85, radius: 1.7 };
+  return {
+    wheels, tails: [tailL, tailR], length: 4.6, width: 1.85, radius: 1.7,
+    // The driver's seat: the eyes sit high enough to clear the roof, and low
+    // enough that the head stays under the headliner.
+    seat: { x: -0.36, y: 1.20 },
+  };
 }
 
 function buildHatchback(group, color) {
@@ -819,7 +892,7 @@ function buildHatchback(group, color) {
     frontZ: 0.82, rearZ: -1.55,
     roofFrontZ: 0.55, roofRearZ: -1.42,
     beltHalfW: 0.76, roofHalfW: 0.69,
-    bPillarZ: -0.1, cPillarZ: -1.2,
+    bPillarZ: -0.45, cPillarZ: -1.2,
     floorY: 0.55,
   });
   part(group, 1.74, 0.14, 0.14, dark, 0, 0.42, 1.9);
@@ -845,7 +918,10 @@ function buildHatchback(group, color) {
     addWheel(group, 0.78, wheelY(), -1.2, false),
   ];
   addWheelArches(group, wheels, 0.85, color);
-  return { wheels, tails: [tailL, tailR], length: 3.9, width: 1.78, radius: 1.55 };
+  return {
+    wheels, tails: [tailL, tailR], length: 4.0, width: 1.78, radius: 1.55,
+    seat: { x: -0.36, y: 1.14 },
+  };
 }
 
 function buildSuv(group, color) {
@@ -890,7 +966,10 @@ function buildSuv(group, color) {
     addWheel(group, 0.86, wheelY(1.08), -1.45, false, 1.08),
   ];
   addWheelArches(group, wheels, 0.96, color);
-  return { wheels, tails: [tailL, tailR], length: 4.7, width: 1.98, radius: 1.85 };
+  return {
+    wheels, tails: [tailL, tailR], length: 4.8, width: 1.98, radius: 1.85,
+    seat: { x: -0.36, y: 1.62 },
+  };
 }
 
 function buildPickup(group, color) {
@@ -938,14 +1017,19 @@ function buildPickup(group, color) {
     addWheel(group, 0.88, wheelY(1.12), -1.65, false, 1.12),
   ];
   addWheelArches(group, wheels, 0.94, color);
-  return { wheels, tails: [tailL, tailR], length: 5.3, width: 1.96, radius: 2.05 };
+  return {
+    wheels, tails: [tailL, tailR], length: 5.4, width: 1.96, radius: 2.05,
+    seat: { x: -0.36, y: 1.58 },
+  };
 }
 
 function buildSports(group, color) {
   const paint = solid(color, 0.5, 0.15);
   const dark = TRIM_MAT;
+  // A low car still has to hold a driver, so the cabin keeps a real height:
+  // the sill sits low, but the roof is high enough for a head under it.
   addCarBody(group, paint, {
-    w: 1.9, bottom: 0.39, top: 0.81,
+    w: 1.9, bottom: 0.32, top: 0.81,
     zFront: 2.175, zBack: -2.175,
     cabinFrontZ: 0.72, cabinRearZ: -1.35,
     cabinHalfW: 0.78,
@@ -953,12 +1037,12 @@ function buildSports(group, color) {
   part(group, 1.78, 0.24, 1.1, paint, 0, 0.78, 1.75);
   addGreenhouse(group, {
     paint, bodyColor: color,
-    beltY: 0.81, roofY: 1.24,
+    beltY: 0.81, roofY: 1.38,
     frontZ: 0.72, rearZ: -1.35,
     roofFrontZ: 0.42, roofRearZ: -1.15,
     beltHalfW: 0.78, roofHalfW: 0.7,
     pillar: 0.075,
-    floorY: 0.47,
+    floorY: 0.39,
   });
   part(group, 0.08, 0.28, 0.1, dark, -0.55, 1.14, -2.0);
   part(group, 0.08, 0.28, 0.1, dark, 0.55, 1.14, -2.0);
@@ -972,7 +1056,7 @@ function buildSports(group, color) {
   addCarTrim(group, {
     paint, dark, bodyColor: color,
     halfW: 0.95, frontZ: 2.2, rearZ: -2.2, beltY: 0.84,
-    sillY: 0.39, bodyTopY: 0.81,
+    sillY: 0.32, bodyTopY: 0.81,
     cabinFrontZ: 0.65, cabinRearZ: -0.6,
     doors: 1,
     deckRearZ: -1.55,
@@ -984,21 +1068,34 @@ function buildSports(group, color) {
     addWheel(group, 0.86, wheelY(), -1.45, false),
   ];
   addWheelArches(group, wheels, 0.95, color);
-  return { wheels, tails: [tailL, tailR], length: 4.45, width: 1.98, radius: 1.7 };
+  return {
+    wheels, tails: [tailL, tailR], length: 4.65, width: 1.98, radius: 1.7,
+    seat: { x: -0.36, y: 0.93 },
+  };
 }
 
 function buildVan(group, color) {
   const paint = solid(color, 0.62, 0.05);
   const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
-  part(group, 1.9, 1.45, 4.7, paint, 0, 1.12, 0);
-  part(group, 1.55, 0.55, 0.06, glass, 0, 1.45, 2.38);
-  part(group, 0.05, 0.5, 0.7, glass, -0.96, 1.5, 1.7);
-  part(group, 0.05, 0.5, 0.7, glass, 0.96, 1.5, 1.7);
+  const glass = CABIN_GLASS_MAT;
+  // The shell is built panel by panel with the windows cut out of it, so the
+  // glass is a hole in the body and the cabin shows through it.
+  addBoxSkin(group, paint, {
+    halfW: 0.95, bottom: 0.395, top: 1.845, frontZ: 2.35, backZ: -2.35,
+    front: { from: -0.775, to: 0.775, low: 1.175, high: 1.725 },
+    back: { from: -0.73, to: 0.73, low: 1.25, high: 1.75 },
+    sides: { from: 1.2, to: 1.85, low: 1.25, high: 1.75 },
+  });
+  part(group, 1.55, 0.55, 0.05, glass, 0, 1.45, 2.32, SCREEN_GLASS);
+  part(group, 0.05, 0.5, 0.65, glass, -0.92, 1.5, 1.525, SIDE_GLASS);
+  part(group, 0.05, 0.5, 0.65, glass, 0.92, 1.5, 1.525, SIDE_GLASS);
+  part(group, 1.46, 0.5, 0.05, glass, 0, 1.5, -2.32, SCREEN_GLASS);
   const vanTrim = trimPalette(color).accent;
-  for (const side of [-1, 1]) frameSideWindow(group, side, 0.96, 1.5, 1.7, 0.5, 0.7, vanTrim);
-  part(group, 1.58, 0.62, 0.04, dark, 0, 1.5, -2.355, vanTrim);
-  part(group, 1.46, 0.5, 0.06, glass, 0, 1.5, -2.375);
+  for (const side of [-1, 1]) frameSideWindow(group, side, 0.95, 1.5, 1.525, 0.5, 0.65, vanTrim);
+  // The frame around the rear door window.
+  part(group, 0.06, 0.62, 0.04, dark, -0.76, 1.5, -2.355, vanTrim);
+  part(group, 0.06, 0.62, 0.04, dark, 0.76, 1.5, -2.355, vanTrim);
+  part(group, 1.58, 0.06, 0.04, dark, 0, 1.78, -2.355, vanTrim);
   part(group, 1.92, 0.18, 0.12, dark, 0, 0.48, 2.4);
   part(group, 1.92, 0.18, 0.12, dark, 0, 0.48, -2.4);
   part(group, 0.24, 0.16, 0.06, glow(0xfff1cc, 0.6), -0.62, 0.72, 2.4);
@@ -1009,14 +1106,14 @@ function buildVan(group, color) {
     paint, dark, bodyColor: color,
     halfW: 0.95, frontZ: 2.4, rearZ: -2.4, beltY: 1.25,
     sillY: 0.4, bodyTopY: 1.845,
-    cabinFrontZ: 2.0, cabinRearZ: 1.35,
+    cabinFrontZ: 1.9, cabinRearZ: 1.15,
     doors: 1,
     exhaust: false,
     deckRearZ: null,
   });
   addCabShell(group, {
     halfW: 0.9, floorY: 0.48, roofY: 1.8,
-    frontZ: 2.32, backZ: 0.6,
+    frontZ: 2.29, backZ: 0.6,
     windowBottomY: 1.25, windowTopY: 1.75,
     glassHalfW: 0.78, glassBottomY: 1.18, glassTopY: 1.73,
   });
@@ -1032,30 +1129,43 @@ function buildVan(group, color) {
     addWheel(group, 0.9, wheelY(), -1.5, false),
   ];
   addWheelArches(group, wheels, 0.95, color);
-  return { wheels, tails: [tailL, tailR], length: 4.85, width: 1.95, radius: 1.85 };
+  return {
+    wheels, tails: [tailL, tailR], length: 4.9, width: 1.95, radius: 1.85,
+    seat: { x: -0.42, y: 1.35 },
+  };
 }
 
 function buildBus(group, color) {
   const paint = solid(color, 0.6, 0.05);
   const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
-  part(group, 2.45, 2.5, 10.4, paint, 0, 1.7, 0);
+  const glass = CABIN_GLASS_MAT;
+  // The body is a shell of panels with the window band cut out of the sides,
+  // so the glass is a hole in the paint and the seats show through it.
+  addBoxSkin(group, paint, {
+    halfW: 1.225, bottom: 0.45, top: 2.95, frontZ: 5.2, backZ: -5.2,
+    front: { from: -1.05, to: 1.05, low: 1.85, high: 2.75 },
+    back: { from: -0.95, to: 0.95, low: 1.95, high: 2.65 },
+    sides: { from: -4.6, to: 4.7, low: 1.925, high: 2.775 },
+  });
   part(group, 2.4, 0.12, 10.4, paint, 0, 3.0, 0);
-  part(group, 0.06, 0.85, 8.6, glass, -1.24, 2.35, -0.3);
-  part(group, 0.06, 0.85, 8.6, glass, 1.24, 2.35, -0.3);
+  part(group, 0.05, 0.85, 9.3, glass, -1.195, 2.35, 0.05, SIDE_GLASS);
+  part(group, 0.05, 0.85, 9.3, glass, 1.195, 2.35, 0.05, SIDE_GLASS);
+  part(group, 2.1, 0.9, 0.05, glass, 0, 2.3, 5.17, SCREEN_GLASS);
+  part(group, 1.9, 0.7, 0.05, glass, 0, 2.3, -5.17, SCREEN_GLASS);
   const busTrim = trimPalette(color).accent;
   for (const side of [-1, 1]) {
-    part(group, 0.04, 0.05, 8.7, dark, side * 1.25, 1.93, -0.3, busTrim);
-    part(group, 0.04, 0.05, 8.7, dark, side * 1.25, 2.77, -0.3, busTrim);
-    for (let z = -4.4; z <= 4.4; z += 1.1) {
+    part(group, 0.04, 0.05, 9.4, dark, side * 1.25, 1.93, 0.05, busTrim);
+    part(group, 0.04, 0.05, 9.4, dark, side * 1.25, 2.77, 0.05, busTrim);
+    // The mullions stop short of the driver's bay, so the window beside the
+    // seat is one clear pane.
+    for (let z = -4.4; z <= 3.3; z += 1.1) {
       part(group, 0.04, 0.9, 0.06, dark, side * 1.25, 2.35, z, busTrim);
     }
   }
-  part(group, 2.1, 0.9, 0.06, glass, 0, 2.3, 5.22);
-  part(group, 1.9, 0.7, 0.06, glass, 0, 2.3, -5.22);
   const busSeam = trimPalette(color).seam;
-  part(group, 0.07, 1.9, 0.9, dark, 1.24, 1.55, 3.5, busSeam);
-  part(group, 0.07, 1.9, 0.9, dark, 1.24, 1.55, 1.5, busSeam);
+  // The passenger doors, kept below the window band so the glass stays clear.
+  part(group, 0.07, 1.3, 0.9, dark, 1.24, 1.25, 3.5, busSeam);
+  part(group, 0.07, 1.3, 0.9, dark, 1.24, 1.25, 1.5, busSeam);
   part(group, 0.03, 0.08, 0.3, dark, 1.285, 1.55, 3.32, busTrim);
   part(group, 0.03, 0.08, 0.3, dark, 1.285, 1.55, 1.32, busTrim);
   part(group, 2.5, 0.22, 0.16, dark, 0, 0.52, 5.28);
@@ -1075,7 +1185,7 @@ function buildBus(group, color) {
   });
   addCabShell(group, {
     halfW: 1.19, floorY: 0.55, roofY: 2.9,
-    frontZ: 5.16, backZ: 3.4,
+    frontZ: 5.14, backZ: 3.4,
     windowBottomY: 1.93, windowTopY: 2.77,
     glassHalfW: 1.05, glassBottomY: 1.85, glassTopY: 2.75,
   });
@@ -1086,22 +1196,31 @@ function buildBus(group, color) {
     addWheel(group, 1.06, wheelY(1.25), -3.3, false, 1.25),
   ];
   addWheelArches(group, wheels, 1.225, color);
-  return { wheels, tails: [tailL, tailR], length: 10.6, width: 2.5, radius: 5.3 };
+  return {
+    wheels, tails: [tailL, tailR], length: 10.7, width: 2.5, radius: 5.3,
+    seat: { x: -0.62, y: 2.3 },
+  };
 }
 
 function buildTruck(group, color) {
   const paint = solid(color, 0.62, 0.05);
   const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
+  const glass = CABIN_GLASS_MAT;
   part(group, 2.3, 0.32, 6.3, dark, 0, 0.62, -0.1);
   part(group, 2.35, 2.35, 4.6, paint, 0, 1.75, -1.0);
   part(group, 2.1, 2.0, 0.06, solid(0x2a2d30, 0.55, 0.1), 0, 1.7, -3.32);
-  part(group, 2.2, 1.7, 2.0, paint, 0, 1.35, 2.2);
-  part(group, 2.0, 0.75, 0.06, glass, 0, 1.75, 3.22);
-  part(group, 0.06, 0.6, 1.2, glass, -1.11, 1.72, 2.2);
-  part(group, 0.06, 0.6, 1.2, glass, 1.11, 1.72, 2.2);
+  // The cab is a shell of panels with the glass cut out of it, so the driver
+  // can be seen through the windows.
+  addBoxSkin(group, paint, {
+    halfW: 1.1, bottom: 0.5, top: 2.2, frontZ: 3.2, backZ: 1.2,
+    front: { from: -1.0, to: 1.0, low: 1.37, high: 2.13 },
+    sides: { from: 1.6, to: 2.8, low: 1.41, high: 2.03 },
+  });
+  part(group, 2.0, 0.75, 0.05, glass, 0, 1.75, 3.17, SCREEN_GLASS);
+  part(group, 0.05, 0.6, 1.2, glass, -1.07, 1.72, 2.2, SIDE_GLASS);
+  part(group, 0.05, 0.6, 1.2, glass, 1.07, 1.72, 2.2, SIDE_GLASS);
   const truckTrim = trimPalette(color).accent;
-  for (const side of [-1, 1]) frameSideWindow(group, side, 1.11, 1.72, 2.2, 0.6, 1.2, truckTrim);
+  for (const side of [-1, 1]) frameSideWindow(group, side, 1.1, 1.72, 2.2, 0.6, 1.2, truckTrim);
   // Split line and handles on the cargo box doors.
   part(group, 0.035, 1.9, 0.03, dark, 0, 1.7, -3.36, GROOVE_COLOR);
   part(group, 0.3, 0.09, 0.05, dark, -0.45, 1.25, -3.375, truckTrim);
@@ -1124,7 +1243,7 @@ function buildTruck(group, color) {
   });
   addCabShell(group, {
     halfW: 1.06, floorY: 0.62, roofY: 2.15,
-    frontZ: 3.15, backZ: 1.3,
+    frontZ: 3.14, backZ: 1.3,
     windowBottomY: 1.42, windowTopY: 2.02,
     glassHalfW: 1.0, glassBottomY: 1.38, glassTopY: 2.12,
   });
@@ -1135,19 +1254,29 @@ function buildTruck(group, color) {
     addWheel(group, 0.95, wheelY(1.28), -2.7, false, 1.28),
   ];
   addWheelArches(group, wheels, 1.15, color);
-  return { wheels, tails: [tailL, tailR], length: 6.6, width: 2.42, radius: 3.3 };
+  return {
+    wheels, tails: [tailL, tailR], length: 6.8, width: 2.42, radius: 3.3,
+    seat: { x: -0.46, y: 1.7 },
+  };
 }
 function buildAmbulance(group, color) {
   const paint = solid(color, 0.5, 0.1);
   const red = solid(0xc22a2a, 0.45, 0.1);
   const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
-  part(group, 2.0, 1.95, 4.8, paint, 0, 1.35, -0.25);
+  const glass = CABIN_GLASS_MAT;
+  // The body is a shell of panels with the cab windows cut out of it, so the
+  // glass is a hole in the paint and the crew bay shows through it.
+  addBoxSkin(group, paint, {
+    halfW: 1.0, bottom: 0.375, top: 2.325, frontZ: 2.15, backZ: -2.65,
+    front: { from: -0.85, to: 0.85, low: 1.275, high: 2.025 },
+    sides: { from: 0.98, to: 1.9, low: 1.375, high: 1.925 },
+  });
   part(group, 1.9, 0.75, 1.0, paint, 0, 0.9, 2.45);
-  const windshield = part(group, 1.7, 0.75, 0.06, glass, 0, 1.65, 2.38);
-  windshield.rotation.x = 0.18;
-  part(group, 0.05, 0.55, 0.95, glass, -1.0, 1.65, 1.85);
-  part(group, 0.05, 0.55, 0.95, glass, 1.0, 1.65, 1.85);
+  const windshield = part(group, 1.7, 0.75, 0.05, glass, 0, 1.65, 2.2, SCREEN_GLASS);
+  // The screen leans back over the short bonnet, the way a van's does.
+  windshield.rotation.x = -0.18;
+  part(group, 0.05, 0.55, 0.92, glass, -0.97, 1.65, 1.44, SIDE_GLASS);
+  part(group, 0.05, 0.55, 0.92, glass, 0.97, 1.65, 1.44, SIDE_GLASS);
   part(group, 0.04, 0.28, 4.6, red, -1.01, 1.1, -0.3);
   part(group, 0.04, 0.28, 4.6, red, 1.01, 1.1, -0.3);
   for (const side of [-1, 1]) {
@@ -1169,13 +1298,13 @@ function buildAmbulance(group, color) {
     paint, dark, bodyColor: color,
     halfW: 1.0, frontZ: 2.96, rearZ: -2.68, beltY: 1.38,
     sillY: 0.42, bodyTopY: 2.325,
-    cabinFrontZ: 2.1, cabinRearZ: 1.3,
+    cabinFrontZ: 1.9, cabinRearZ: 0.95,
     doors: 1,
     deckRearZ: null,
   });
   addCabShell(group, {
     halfW: 0.96, floorY: 0.5, roofY: 2.28,
-    frontZ: 2.1, backZ: 0.9,
+    frontZ: 2.09, backZ: 0.9,
     windowBottomY: 1.38, windowTopY: 1.92,
     glassHalfW: 0.86, glassBottomY: 1.32, glassTopY: 1.98,
   });
@@ -1186,19 +1315,31 @@ function buildAmbulance(group, color) {
     addWheel(group, 0.9, wheelY(), -1.55, false),
   ];
   addWheelArches(group, wheels, 1.0, color);
-  return { wheels, tails: [tailL, tailR], length: 5.6, width: 2.04, radius: 2.1 };
+  return {
+    wheels, tails: [tailL, tailR], length: 5.85, width: 2.04, radius: 2.1,
+    seat: { x: -0.44, y: 1.65 },
+  };
 }
 
 function buildFireTruck(group, color) {
   const paint = solid(color, 0.55, 0.1);
   const dark = TRIM_MAT;
-  const glass = GLASS_MAT;
+  const glass = CABIN_GLASS_MAT;
   const steel = solid(0x9aa0a4, 0.35, 0.45);
-  part(group, 2.25, 0.3, 8.2, dark, 0, 0.62, 0);
-  part(group, 2.3, 1.85, 2.2, paint, 0, 1.45, 3.0);
-  part(group, 2.0, 0.75, 0.06, glass, 0, 1.75, 4.12);
-  part(group, 0.06, 0.6, 1.3, glass, -1.16, 1.75, 3.0);
-  part(group, 0.06, 0.6, 1.3, glass, 1.16, 1.75, 3.0);
+  // The chassis runs from the rear axle to the front bumper, and no further:
+  // a longer one would stick out behind the body and make the truck longer
+  // than it looks.
+  part(group, 2.25, 0.3, 7.5, dark, 0, 0.62, 0.3);
+  // The cab is a shell of panels with the glass cut out of it, so the crew
+  // can be seen through the windows.
+  addBoxSkin(group, paint, {
+    halfW: 1.15, bottom: 0.525, top: 2.375, frontZ: 4.1, backZ: 1.9,
+    front: { from: -1.0, to: 1.0, low: 1.375, high: 2.125 },
+    sides: { from: 2.35, to: 3.65, low: 1.41, high: 2.03 },
+  });
+  part(group, 2.0, 0.75, 0.05, glass, 0, 1.75, 4.07, SCREEN_GLASS);
+  part(group, 0.05, 0.6, 1.3, glass, -1.12, 1.75, 3.0, SIDE_GLASS);
+  part(group, 0.05, 0.6, 1.3, glass, 1.12, 1.75, 3.0, SIDE_GLASS);
   part(group, 2.4, 2.05, 4.9, paint, 0, 1.75, -1.0);
   for (const z of [0.6, -0.6, -1.8]) {
     part(group, 0.03, 1.2, 1.0, steel, -1.21, 1.55, z);
@@ -1231,7 +1372,7 @@ function buildFireTruck(group, color) {
   });
   addCabShell(group, {
     halfW: 1.11, floorY: 0.66, roofY: 2.32,
-    frontZ: 4.06, backZ: 2.0,
+    frontZ: 4.04, backZ: 2.0,
     windowBottomY: 1.45, windowTopY: 2.05,
     glassHalfW: 1.0, glassBottomY: 1.38, glassTopY: 2.12,
   });
@@ -1244,7 +1385,10 @@ function buildFireTruck(group, color) {
     addWheel(group, 1.0, wheelY(1.28), -2.9, false, 1.28),
   ];
   addWheelArches(group, wheels, 1.15, color);
-  return { wheels, tails: [tailL, tailR], length: 7.8, width: 2.48, radius: 4.0 };
+  return {
+    wheels, tails: [tailL, tailR], length: 7.8, width: 2.48, radius: 4.0,
+    seat: { x: -0.5, y: 1.75 },
+  };
 }
 
 function buildPolice(group, color) {
@@ -1316,7 +1460,7 @@ export function createVehicle(cfg) {
   // cabin it would block the view, so it can be hidden for first person.
   const glassParts = [];
   group.traverse((obj) => {
-    if (obj.isMesh && (obj.material === GLASS_MAT || obj.material === CABIN_GLASS_MAT)) {
+    if (obj.isMesh && obj.material === CABIN_GLASS_MAT) {
       glassParts.push(obj);
     }
   });
@@ -1326,14 +1470,19 @@ export function createVehicle(cfg) {
   let seat;
   if (windshield) {
     seat = {
-      x: windshield.position.x === 0 ? -0.36 : windshield.position.x,
-      y: windshield.position.y,
+      x: built.seat?.x ?? (windshield.position.x === 0 ? -0.36 : windshield.position.x),
+      y: built.seat?.y ?? windshield.position.y,
       z: windshield.position.z - 0.8,
     };
   } else {
     const box = new THREE.Box3().setFromObject(group);
     seat = { x: -0.36, y: Math.min(2.6, box.max.y - 0.4), z: Math.min(0.1, built.length / 2 - 1.2) };
   }
+  // The cushion the driver sits on, and the point where the hips of a seated
+  // character would be. Putting the character on the cushion is what keeps
+  // the head under the roof of whatever it is driving.
+  seat.cushion = seat.y - EYE_OVER_CUSHION;
+  seat.hip = { x: seat.x, y: seat.cushion - SEATED_HIP, z: seat.z - 0.16 };
 
   // A cabin for the first person camera to sit behind.
   let steering = null;

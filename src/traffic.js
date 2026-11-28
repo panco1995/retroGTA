@@ -301,7 +301,7 @@ export function createTraffic({
     vehicle.z = point.z + vehicle.shoveZ;
     vehicle.heading = heading + vehicle.shoveYaw;
     vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);
-    settleOnGround(world.terrain, vehicle);
+    settleOnGround(world.terrain, vehicle, dt);
     vehicle.collider();
 
     // A traffic car that runs into street furniture throws it out of the way

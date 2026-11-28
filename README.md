@@ -75,6 +75,7 @@ The main menu and the pause menu both have a Collection page. It is a full-scree
 
 - **Vehicles** — all 14 vehicle types, in the same paint as the cheat menu
 - **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
+- **Cars that leave the ground** — a car carries its own vertical speed, so coming over the crest of the hill throws it into the air and it comes down with a shove into the springs. A slope is followed, not launched off: what counts as a crest is how sharply the grade changes, so a car going down a steep hill stays on it
 - **Ground that leans** — a hill the car climbs with its nose up and its body following the slope across it, and sand that takes grip and top speed away. The ground is one surface object, so adding a new kind — a beach, a yard, a ramp — is a polygon and a name in the map
 - **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster. A car throws the bags and the hydrant, shoves the skip, and knocks the lamp post over; the post falls about its foot, lands across the road, and sparks from its live cable until the scene is reset. A tree is older than the street: it is taller than a car and does not come down
 - **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, a hospital, a police station, and the safehouse, all from the city's shared building builder

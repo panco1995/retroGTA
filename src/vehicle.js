@@ -1478,6 +1478,11 @@ export function createVehicle(cfg) {
     // that the settle does not flatten out a car parked across a slope.
     roll: 0,
     groundRoll: 0,
+    // Vertical speed, and whether the wheels are off the ground. A car that has
+    // just come over the crest of the hill is in the air, still going the way
+    // it was going, and comes down with a shove into the springs.
+    vy: 0,
+    airborne: false,
     wheels: built.wheels,
     tails: built.tails,
     windshield,

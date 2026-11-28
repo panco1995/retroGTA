@@ -825,7 +825,7 @@ export function createGame(canvas) {
       const along = Math.sin(vehicle.heading) * vehicle.knockVX
         + Math.cos(vehicle.heading) * vehicle.knockVZ;
       vehicle.speed = Math.abs(along) > 0.15 ? along : 0;
-      settleOnGround(world.terrain, vehicle);
+      settleOnGround(world.terrain, vehicle, dt);
       vehicle.collider();
     }
   }
@@ -1512,7 +1512,7 @@ export function createGame(canvas) {
     if (hitCar) impactVehicle(hitCar);
     hero.collider();
 
-    settleOnGround(world.terrain, hero);
+    settleOnGround(world.terrain, hero, dt);
 
     // Only leave the car once it is slow enough, but keep the key pending so
     // a press while moving fast still works once the car has slowed down.

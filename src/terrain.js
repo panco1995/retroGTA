@@ -25,6 +25,25 @@
 // the map meets the next.
 
 import { insidePolygon } from './collision.js';
+import { GRAVITY } from './physics.js';
+
+// How sharply the grade has to change before the car leaves the ground, in
+// metres per second of ground rise. A slope is a steady grade and the car
+// follows it; a crest is the grade falling away from under the wheels all at
+// once. Driving at 12 m/s, going from a 40% climb to a 40% drop changes the
+// ground's own speed by about 10 m/s, and no slope changes that fast.
+const CREST_SHARPNESS = 3.5;
+// How far the body dips for each metre per second it arrives at the ground
+// with, and the most it can dip. A landing is felt in the springs, not in a
+// bounce that lifts the car back into the air.
+const LANDING_GIVE = 0.012;
+const MAX_LANDING_DIP = 0.16;
+// How far below the ground a car may fall before it is put back on it. This is
+// a net, not a rule: the ground is read from the map and the map has an edge,
+// so a car should never get here. A car falling for ever is worse than one
+// landing somewhere unexpected.
+const FALL_ESCAPE = 30;
+
 
 // How far either side of a point the height is sampled to work out the lean,
 // in metres. Roughly the half of a wheelbase, so the lean is the slope over
@@ -169,17 +188,110 @@ export function leanOn(normal, heading, out = { pitch: 0, roll: 0 }) {
   return out;
 }
 
-// Puts a vehicle on the ground under it and leans it to match. This is the one
-// place a car is stood on the world, so the height and the lean can never
-// disagree: both are read from the same sample.
+// Puts a vehicle on the ground under it and leans it to match.
+//
+// The height is no longer taken straight from the ground. A car carries its own
+// vertical speed, so that driving off the top of the hill carries it into the
+// air and it comes down again with a shove into the springs, instead of the
+// body being placed on whatever the ground is doing that frame. The ground is
+// what it lands on, not what it is glued to.
+//
+// The rules are the ones a car obeys:
+//
+//   - On the ground and the ground rising under it, the car is carried up with
+//     the ground. Driving up a slope does not launch you.
+//   - On the ground and the ground falling away faster than gravity would take
+//     the car, it leaves the ground: the crest of a hill, the edge of a ramp.
+//   - In the air, gravity pulls it down until the ground is under it again.
+//   - Landing costs the springs: the body dips by the speed it arrived with.
+//
+// `dt` of zero means "put it on the ground and leave it", which is what laying
+// out the map and resetting the game want.
 const _lean = { pitch: 0, roll: 0 };
 const _normal = { x: 0, y: 1, z: 0 };
-export function settleOnGround(terrain, vehicle) {
-  vehicle.y = terrain.heightAt(vehicle.x, vehicle.z);
+export function settleOnGround(terrain, vehicle, dt = 0) {
+  const ground = terrain.heightAt(vehicle.x, vehicle.z);
   terrain.normalAt(vehicle.x, vehicle.z, _normal);
   leanOn(_normal, vehicle.heading, _lean);
   vehicle.pitch = _lean.pitch;
   vehicle.groundRoll = _lean.roll;
+
+  if (!dt) {
+    vehicle.y = ground;
+    vehicle.groundY = ground;
+    vehicle.vy = 0;
+    vehicle.airborne = false;
+    return vehicle.y;
+  }
+
+  const previous = vehicle.y ?? ground;
+  // Where the ground was under the car last frame, so the slope can be read as
+  // the car's own speed along it.
+  const climbed = ground - (vehicle.groundY ?? ground);
+  vehicle.groundY = ground;
+
+  if (!vehicle.airborne) {
+    // On its wheels. The car is carried up and down whatever the ground does,
+    // so long as the ground does not fall away faster than the car could fall:
+    // a crest drops away almost at once, a slope does not.
+    //
+    // What counts as a crest rather than a slope is how sharply the grade
+    // changes, not how big the drop is: a car going down a 50% hill is still
+    // on the hill, and taking off every frame because the ground under it is
+    // falling fast would have it hopping all the way down. The grade changing
+    // from what it was to something far steeper is a crest.
+    const wasGrade = vehicle.groundGrade ?? 0;
+    const grade = dt > 0 ? climbed / dt : 0;
+    vehicle.groundGrade = grade;
+    const sharpness = Math.abs(grade - wasGrade);
+    const leave = sharpness > CREST_SHARPNESS && grade < wasGrade;
+    if (leave) {
+      // Over the crest: it is in the air, carrying on at the speed it was
+      // climbing at. That is what throws it up: coming up a slope at 12 m/s
+      // with the ground rising a metre a second, the car leaves with a metre a
+      // second of climb still in it, and gravity has to take that back before
+      // it starts to come down.
+      vehicle.airborne = true;
+      vehicle.airTime = 0;
+      vehicle.vy = Math.max(0, wasGrade);
+      vehicle.y = previous;
+    } else {
+      vehicle.y = ground;
+      vehicle.vy = 0;
+      vehicle.airTime = (vehicle.airTime ?? 0) + 1;
+      return vehicle.y;
+    }
+  }
+
+  // In the air: gravity takes it down.
+  vehicle.vy = (vehicle.vy ?? 0) - GRAVITY * dt;
+  vehicle.y = previous + vehicle.vy * dt;
+
+  // A car that has fallen far below the ground it should be on is put back on
+  // it. Nothing should be able to do this - the ground is read from the map
+  // and the map has an edge the car cannot cross - but a car falling for ever
+  // is a worse failure than a car that lands somewhere it did not expect, and
+  // it is the kind of thing a new piece of map can introduce.
+  if (vehicle.y < ground - FALL_ESCAPE) {
+    vehicle.y = ground;
+    vehicle.vy = 0;
+    vehicle.airborne = false;
+    vehicle.airTime = 0;
+    return vehicle.y;
+  }
+
+  if (vehicle.y <= ground) {
+    // It has come down. The springs take the arrival, and the body dips.
+    const landing = vehicle.vy ?? 0;
+    vehicle.y = ground;
+    vehicle.vy = 0;
+    vehicle.airborne = false;
+    vehicle.airTime = 0;
+    const thump = Math.min(MAX_LANDING_DIP, Math.max(0, -landing) * LANDING_GIVE);
+    if (thump > 0) {
+      vehicle.bounce = Math.min((vehicle.bounce || 0) - thump, 0);
+    }
+  }
   return vehicle.y;
 }
 

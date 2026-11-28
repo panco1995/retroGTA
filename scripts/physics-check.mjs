@@ -126,5 +126,76 @@ function check(label, ok, detail = '') {
     GROUP.body !== GROUP.prop && GROUP.bodyWorld !== GROUP.propWorld);
 }
 
+// A car carries its own vertical speed, so driving over a crest throws it into
+// the air and it comes down again, where before it was glued to the ground and
+// stepped down the far side in one frame.
+{
+  const { createTerrain, settleOnGround } = await import('../src/terrain.js');
+  const dt = 1 / 60;
+
+  // A hill that climbs at 40%, falls at 40% down the far side, and then levels
+  // out again, so a car that goes over it has somewhere to land.
+  const hill = (x, z) => {
+    if (z >= 0) return 0;
+    if (z > -10) return -z * 0.4;
+    if (z > -20) return 4 + (z + 10) * 0.4;
+    return 0;
+  };
+  const terrain = createTerrain({ height: hill });
+
+  function drive(speed) {
+    const car = {
+      x: 0, z: 6, heading: Math.PI, y: 0, vy: 0, airborne: false,
+      pitch: 0, groundRoll: 0,
+    };
+    settleOnGround(terrain, car, 0);
+    let air = 0;
+    let peak = 0;
+    let takeoffVy = 0;
+    let climbedOnGround = true;
+    for (let f = 0; f < 240; f += 1) {
+      car.z -= speed * dt;
+      const before = car.airborne;
+      settleOnGround(terrain, car, dt);
+      if (!before && car.airborne) takeoffVy = car.vy;
+      if (car.airborne) {
+        air += 1;
+        peak = Math.max(peak, car.y - hill(0, car.z));
+      } else if (car.z > -10 && Math.abs(car.y - hill(0, car.z)) > 0.01) {
+        // While climbing, the car is on the ground, not floating or sunk.
+        climbedOnGround = false;
+      }
+    }
+    return { air, peak, takeoffVy, climbedOnGround };
+  }
+
+  const slow = drive(6);
+  const fast = drive(20);
+
+  check('a car climbing a slope stays on it', slow.climbedOnGround && fast.climbedOnGround);
+  check('a car over a crest leaves the ground', fast.air > 30, `${(fast.air / 60).toFixed(2)} s in the air`);
+  check('a faster car is thrown further', fast.air > slow.air * 2,
+    `${(fast.air / 60).toFixed(2)} s against ${(slow.air / 60).toFixed(2)} s`);
+  check('a faster car goes higher', fast.peak > slow.peak * 2,
+    `${fast.peak.toFixed(2)} m against ${slow.peak.toFixed(2)} m`);
+  check('the car leaves with the climb it had in it', fast.takeoffVy > 2,
+    `${fast.takeoffVy.toFixed(1)} m/s upward at take off`);
+
+  // It comes down again, and is on the ground at the end of the run.
+  {
+    const car = {
+      x: 0, z: 6, heading: Math.PI, y: 0, vy: 0, airborne: false,
+      pitch: 0, groundRoll: 0,
+    };
+    settleOnGround(terrain, car, 0);
+    for (let f = 0; f < 400; f += 1) {
+      car.z -= 12 * dt;
+      settleOnGround(terrain, car, dt);
+    }
+    check('a car that went over a crest comes back down', !car.airborne,
+      `z ${car.z.toFixed(1)}, y ${car.y.toFixed(2)}`);
+  }
+}
+
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

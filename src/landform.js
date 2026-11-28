@@ -184,6 +184,66 @@ export function flat(x0, z0, x1, z1, y, opts = {}) {
   );
 }
 
+// The ground, from the pieces the map declares.
+//
+// A map that says what its ground is made of should not need a function
+// written for it. Each entry is one piece, in the same shape the builders take:
+//
+//   { "kind": "ramp", "axis": "z", "from": -7, "to": -41,
+//     "cross": [-120.2, -99.8], "y": [0, 5.2], "ease": 8,
+//     "material": "hill", "skirt": -0.1 }
+//
+//   { "kind": "flat", "rect": [-100.4, -22.2, -87, -9.6], "y": 2.4,
+//     "material": "pad" }
+//
+//   { "kind": "slope", "corners": [[x, z, y], ...], "material": "hill" }
+//
+// `material` and `skirt` become the feature's draw options; everything else is
+// the builder's own arguments. A piece with a kind nobody here knows is skipped
+// rather than throwing, so a map written for a newer engine still loads.
+export function featuresFrom(spec = [], context = {}) {
+  const out = [];
+  for (const entry of spec) {
+    if (!entry || !entry.kind) continue;
+    const opts = {};
+    if (entry.material) opts.material = entry.material;
+    if (entry.skirt !== undefined) opts.skirt = entry.skirt;
+    if (entry.kind === 'ramp') {
+      out.push(ramp({
+        axis: entry.axis ?? 'z',
+        from: entry.from,
+        to: entry.to,
+        cross0: entry.cross?.[0],
+        cross1: entry.cross?.[1],
+        y0: entry.y?.[0],
+        y1: entry.y?.[1],
+        ease: entry.ease ?? 6,
+        opts,
+      }));
+    } else if (entry.kind === 'flat') {
+      // A flat piece is given as a rectangle, or as corners like a slope.
+      const r = entry.rect;
+      if (r) {
+        out.push(flat(r[0], r[1], r[2], r[3], entry.y ?? 0, opts));
+      } else if (entry.corners) {
+        out.push(flat(
+          entry.corners[0][0], entry.corners[0][1],
+          entry.corners[2][0], entry.corners[2][1],
+          entry.corners[0][2], opts,
+        ));
+      }
+    } else if (entry.kind === 'slope') {
+      out.push(slope(entry.corners, opts));
+    } else if (typeof context[entry.kind] === 'function') {
+      // A kind the map is allowed to spell out itself, such as a shelf whose
+      // height depends on the hill it is cut into.
+      const built = context[entry.kind](entry, opts);
+      if (built) out.push(built);
+    }
+  }
+  return out;
+}
+
 // The ground, from its features.
 //
 // `kindAt` is asked for the surface at a point - rock, asphalt, whatever the

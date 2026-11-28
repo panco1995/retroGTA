@@ -83,7 +83,15 @@
     "rise": 5.2,
     "taper": 26,
     "west": 14,
-    "pad": { "minX": -100.4, "maxX": -87, "minZ": -22.2, "maxZ": -9.6, "doorZ": -16 }
+    "pad": { "minX": -100.4, "maxX": -87, "minZ": -22.2, "maxZ": -9.6, "doorZ": -16 },
+    "features": [
+      { "kind": "ramp", "axis": "z", "from": -7, "to": -41, "cross": [-120.2, -99.8], "y": [0, 5.2], "ease": 8, "material": "hill", "skirt": -0.1 },
+      { "kind": "flat", "rect": [-120.2, -55, -99.8, -41], "y": 5.2, "material": "hill", "skirt": -0.1 },
+      { "kind": "ramp", "axis": "z", "from": -55, "to": -81, "cross": [-120.2, -99.8], "y": [5.2, 0], "ease": 8, "material": "hill", "skirt": -0.1 },
+      { "kind": "ramp", "axis": "x", "from": -120.2, "to": -124, "cross": [-55.0, -41.0], "y": [5.2, 0], "ease": 3, "material": "hill", "skirt": -0.1 },
+      { "kind": "ramp", "axis": "x", "from": -99.8, "to": -84, "cross": [-55.0, -41.0], "y": [5.2, 0], "ease": 3, "material": "hill", "skirt": -0.1 },
+      { "kind": "pad", "rect": [-100.4, -22.2, -87, -9.6], "material": "pad" }
+    ]
   },
   "safehouse": {
     "x": -93.5,

@@ -268,5 +268,38 @@ function check(label, ok, detail = '') {
     `${(worst * 180 / Math.PI).toFixed(2)} deg off${at ? ` (car at ${at.x.toFixed(0)}, ${at.z.toFixed(0)}, heading ${(at.heading * 180 / Math.PI).toFixed(0)})` : ''}`);
 }
 
+// The ground comes from the map, so a map with a different hill has a different
+// hill. This is what makes rebuilding the island a change to the data rather
+// than to the code: the pieces are read, not written out in a function.
+{
+  const { featuresFrom, createLandform } = await import('../src/landform.js');
+
+  const made = featuresFrom([
+    { kind: 'ramp', axis: 'z', from: 0, to: 20, cross: [-5, 5], y: [0, 4], ease: 4 },
+    { kind: 'flat', rect: [-5, 20, 5, 40], y: 4 },
+  ]);
+  check('a ramp and a shelf come out of the data', made.length === 2,
+    `${made.length} pieces`);
+
+  const land = createLandform(made);
+  check('the ramp made from data climbs', Math.abs(land.heightAt(0, 20) - 4) < 1e-9);
+  check('the shelf made from data is level', land.heightAt(0, 30) === 4);
+  check('the ground outside the pieces is flat', land.heightAt(50, 50) === 0);
+
+  // A piece of a kind the engine does not know is skipped, so a map written for
+  // a newer version still loads.
+  const unknown = featuresFrom([
+    { kind: 'volcano', at: [0, 0] },
+    { kind: 'flat', rect: [0, 0, 1, 1], y: 1 },
+  ]);
+  check('an unknown kind is skipped rather than thrown on', unknown.length === 1);
+
+  // And the map in the repository declares its own pieces.
+  const { MAP } = await import('../src/config.js');
+  check('the map declares the pieces of its ground',
+    Array.isArray(MAP.hill?.features) && MAP.hill.features.length > 0,
+    `${MAP.hill?.features?.length ?? 0} pieces`);
+}
+
 console.log(failures === 0 ? 'OK' : `${failures} failures`);
 if (failures > 0) process.exit(1);

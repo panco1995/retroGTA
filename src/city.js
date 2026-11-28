@@ -19,7 +19,7 @@ import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
 import { createTerrain, settleOnGround, surfaceAreas } from './terrain.js';
-import { buildFeatureMeshes, createLandform, flat, ramp, slope } from './landform.js';
+import { buildFeatureMeshes, createLandform, featuresFrom, flat, ramp, slope } from './landform.js';
 import { createVehicle } from './vehicle.js';
 
 const SIGNS = MAP.signs;
@@ -341,87 +341,31 @@ export function buildCity() {
   //
   // The pieces cover the hill without overlapping, so the order they are in
   // does not matter: the way up, the top, the way down, and the two arms.
+  // The hill, as pieces of ground the map declares.
+  //
+  // Each entry in `hill.features` is one piece - a ramp, a flat shelf, a slope
+  // through four corners - and `featuresFrom` turns it into the same builders
+  // the rest of the ground uses. Adding a second hill, or reshaping this one, is
+  // a change to the map and not to this file.
+  //
+  // The one kind the map cannot spell out is the shelf the safehouse stands on:
+  // its height has to match the road at its door, so it is worked out here from
+  // the hill it is cut into.
   function hillFeatures() {
     const h = hillSpec();
     if (!h) return [];
-    const { roadX, zLow, zHigh, rise, taper } = h;
-    const zTop = h.zTop;
-    const zNorth = zHigh - ROAD_W;
-    const hw = ROAD_W / 2 + WALK;
-    const westReach = h.west ?? taper;
-    const out = [];
-
-    // The way up, from the level of the street to the top. Its ends are
-    // rounded so the grade eases in from the flat street and out onto the top
-    // instead of folding sharply at both seams.
-    out.push(ramp({
-      axis: 'z',
-      from: zLow, to: zHigh,
-      cross0: roadX - hw, cross1: roadX + hw,
-      y0: 0, y1: rise,
-      ease: HILL_EASE,
-      opts: { material: 'hill', skirt: -0.1 },
-    }));
-
-    // The top, between the top of the climb and the start of the far side.
-    out.push(flat(
-      roadX - hw, zNorth,
-      roadX + hw, zHigh,
-      rise, { material: 'hill', skirt: -0.1 },
-    ));
-
-    // The way down on the far side.
-    out.push(ramp({
-      axis: 'z',
-      from: zNorth, to: zNorth - taper,
-      cross0: roadX - hw, cross1: roadX + hw,
-      y0: rise, y1: 0,
-      ease: HILL_EASE,
-      opts: { material: 'hill', skirt: -0.1 },
-    }));
-
-    // The two arms, which run out sideways from the top along the cross road.
-    // They are level along the road and fall away to nothing at their ends.
-    // The two arms, which run out sideways from the top along the cross road.
-    // They are level along the road and fall away to nothing at their ends,
-    // and like the climb their ends are rounded so they meet the level top and
-    // the flat ground at the bottom without a fold.
-    const armZ0 = zTop - ROAD_W / 2;
-    const armZ1 = zTop + ROAD_W / 2;
-    const westArm = ramp({
-      axis: 'x',
-      from: roadX - hw, to: roadX - westReach,
-      cross0: armZ0, cross1: armZ1,
-      y0: rise, y1: 0,
-      ease: ARM_EASE,
-      opts: { material: 'hill', skirt: -0.1 },
+    const { zLow, zHigh, rise } = h;
+    return featuresFrom(h.features ?? [], {
+      pad(entry, opts) {
+        const pad = h.pad;
+        if (!pad) return null;
+        // The height the road has reached by the door, so the house does not
+        // sit on a slope.
+        const y = rise * (zLow - pad.doorZ) / (zLow - zHigh);
+        const r = entry.rect ?? [pad.minX, pad.minZ, pad.maxX, pad.maxZ];
+        return flat(r[0], r[1], r[2], r[3], y, opts);
+      },
     });
-    const eastArm = ramp({
-      axis: 'x',
-      from: roadX + hw, to: roadX + taper,
-      cross0: armZ0, cross1: armZ1,
-      y0: rise, y1: 0,
-      ease: ARM_EASE,
-      opts: { material: 'hill', skirt: -0.1 },
-    });
-    out.push(westArm, eastArm);
-
-    // The shelf the safehouse stands on. It is a piece of level ground set into
-    // the way up, at the height the road has reached by its door, so the house
-    // does not sit on a slope.
-    if (h.pad) {
-      const pad = h.pad;
-      if (pad.y === undefined) {
-        pad.y = rise * (zLow - pad.doorZ) / (zLow - zHigh);
-      }
-      out.push(flat(
-        pad.minX, pad.minZ,
-        pad.maxX, pad.maxZ,
-        pad.y, { material: 'pad' },
-      ));
-    }
-
-    return out;
   }
 
   // The ground of the hill, as one thing that answers where it is high.

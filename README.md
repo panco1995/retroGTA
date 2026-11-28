@@ -75,6 +75,7 @@ The main menu and the pause menu both have a Collection page. It is a full-scree
 
 - **Vehicles** — all 14 vehicle types, in the same paint as the cheat menu
 - **People** — one look for each of the 12 pedestrian kinds, built from the same outfit tables as the crowd
+- **Ground that leans** — a hill the car climbs with its nose up and its body following the slope across it, and sand that takes grip and top speed away. The ground is one surface object, so adding a new kind — a beach, a yard, a ramp — is a polygon and a name in the map
 - **Street props** — street lamp, fire hydrant, trash bags, street tree, and dumpster. A car throws the bags and the hydrant, shoves the skip, and knocks the lamp post over; the post falls about its foot, lands across the road, and sparks from its live cable until the scene is reset. A tree is older than the street: it is taller than a car and does not come down
 - **Buildings** — a row house, a shopfront, a convenience store, a water-tower house, an industrial warehouse, a hospital, a police station, and the safehouse, all from the city's shared building builder
 
@@ -189,6 +190,7 @@ The crowd reacts to traffic: people wait at the curb while a car comes through t
 | `src/npc.js` | Pedestrian kinds, sidewalk graph, and the streamed crowd |
 | `src/traffic.js` | Block lane loops, ambient traffic, and car following |
 | `src/vehicle.js` | Vehicle meshes, driving state, and the 14 builders: the body is merged per material, the tyre and hub share one wheel mesh, and cabins get seats, a dashboard and a steering wheel; passenger cars use clear glass and traffic cars carry a seated driver |
+| `src/terrain.js` | The ground, as one object: a height, a lean, and what it is made of. Everything asks it, so a car and a walking person are always standing on the same answer. The lean comes from the height by sampling either side, at a step that narrows near a kerb so the flat beside it stays flat. Each material has its own grip and drag, so sand is slower and steers less than asphalt |
 | `src/collision.js` | Circle collision between people, oriented vehicle bodies, and the walkable island and bridge |
 | `src/spatial.js` | Spatial index for the colliders: the static ones are bucketed into a grid and queried by cell, the ones that move (cars) are kept on a short list that is always tested |
 | `src/props.js` | Street furniture: lamp posts, hydrants, rubbish bags, trees and skips. The city and the collection gallery share one model for each, and the collider is written next to the geometry. A prop that a car can throw also says what it weighs and how it is thrown, in the same function |

@@ -1473,7 +1473,11 @@ export function createVehicle(cfg) {
     shoveZ: 0,
     shoveYaw: 0,
     bounce: 0,
+    // How far the body rocks on its springs, which settles back to level, and
+    // how far it leans on the ground, which does not. They are kept apart so
+    // that the settle does not flatten out a car parked across a slope.
     roll: 0,
+    groundRoll: 0,
     wheels: built.wheels,
     tails: built.tails,
     windshield,
@@ -1489,8 +1493,10 @@ export function createVehicle(cfg) {
       group.rotation.order = 'YXZ';
       group.position.set(this.x, (this.y || 0) + (this.bounce || 0), this.z);
       group.rotation.y = this.heading;
+      // `pitch` is the lean of the ground under the car; `roll` is the rock of
+      // the springs, and `groundRoll` the lean of the ground across the car.
       group.rotation.x = this.pitch || 0;
-      group.rotation.z = this.roll || 0;
+      group.rotation.z = (this.roll || 0) + (this.groundRoll || 0);
     },
     aabb() {
       const c = Math.abs(Math.cos(this.heading));

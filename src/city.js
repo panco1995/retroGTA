@@ -18,6 +18,7 @@ import { buildingHeight, createBuilding } from './building.js';
 import { insidePolygon } from './collision.js';
 import { buildDumpster, buildHydrant, buildLamp, buildTrash, buildTree } from './props.js';
 import { ColliderList } from './spatial.js';
+import { createTerrain, surfaceAreas } from './terrain.js';
 import { createVehicle } from './vehicle.js';
 
 const SIGNS = MAP.signs;
@@ -73,6 +74,9 @@ export function buildCity() {
   const knockables = [];
   const buildings = [];
   const roads = [];
+  // The ground types laid over the map: roads, pavements, and whatever the
+  // map itself names. terrain.js answers with these.
+  const surfaces = [];
   const stripes = [];
   // Sidewalk center lines. The crowd walks these and spawns on them.
   const walkways = [];
@@ -101,10 +105,20 @@ export function buildCity() {
   function addAsphalt(x, z, w, d) {
     box(w, ROAD_TOP, d, asphaltMat, x, ROAD_TOP / 2, z, { receive: true });
     roads.push({ x, z, w, d });
+    // A road is asphalt to drive on, and it is a rectangle, so the surface
+    // query is a handful of comparisons rather than a point in a polygon.
+    surfaces.push({
+      kind: 'asphalt',
+      rect: { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 },
+    });
   }
 
   function addWalk(x, z, w, d) {
     box(w, WALK_TOP, d, walkMat, x, WALK_TOP / 2, z, { receive: true });
+    surfaces.push({
+      kind: 'walk',
+      rect: { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 },
+    });
   }
 
   // The building itself lives in building.js so the collection gallery can
@@ -855,6 +869,11 @@ export function buildCity() {
   addShape(MAP.island, 0, 0x3e3a34);
   if (MAP.beach) addShape(MAP.beach, 0.03, 0xc6b48a);
   if (MAP.landing) addShape(MAP.landing, 0.02, 0x4a463c);
+  // The sand is ground like any other now, not just a colour laid on top: a
+  // car that drives onto it loses grip and bogs down. It goes to the front of
+  // the list, because a beach is drawn over everything the city laid down and
+  // the map says what is underfoot, not the rectangle a road happens to be.
+  if (MAP.beach) surfaces.unshift({ kind: 'sand', ring: MAP.beach });
   addWaterfront();
   const el = addEl();
   addGate();
@@ -902,16 +921,15 @@ export function buildCity() {
   const vehicles = [];
 
   function placeVehicle(vehicle, x, z, heading) {
-    const ahead = 3;
     vehicle.x = x;
     vehicle.z = z;
     vehicle.heading = heading;
+    // The terrain is not built yet while the map is being laid out, so a
+    // parked car is stood on the raw height here; the first frame it is asked
+    // about, the terrain takes over and leans it against the slope.
     vehicle.y = groundHeight(x, z);
-    const nose = groundHeight(
-      x + Math.sin(heading) * ahead,
-      z + Math.cos(heading) * ahead,
-    );
-    vehicle.pitch = -Math.atan2(nose - vehicle.y, ahead);
+    vehicle.groundRoll = 0;
+    vehicle.pitch = 0;
     vehicle.sync();
     return vehicle;
   }
@@ -961,6 +979,18 @@ export function buildCity() {
   let trainZ = MAP.train.startZ;
   let trainDir = 1;
 
+  // The ground as one object. It answers with the height, which is what the
+  // rest of the game asked for before, and with the lean and the material,
+  // which is what a vehicle on a slope needs.
+  //
+  // Surfaces named by the map are searched before the roads and pavements the
+  // city laid itself, so a map can put a patch of sand over a corner of road
+  // and have it win.
+  const terrain = createTerrain({
+    height: groundHeight,
+    kinds: [...surfaceAreas(MAP.surfaces), ...surfaces],
+  });
+
   return {
     group,
     colliders,
@@ -973,7 +1003,9 @@ export function buildCity() {
     trafficLoops,
     spawn,
     safehouse,
-    ground: groundHeight,
+    // The old name, kept because most of the game only ever wanted a height.
+    ground: terrain.heightAt,
+    terrain,
     el: { x: el.x, z0: el.z0, z1: el.z1 },
     shore: MAP.island,
     beach: MAP.beach,

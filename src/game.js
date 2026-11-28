@@ -16,6 +16,7 @@ import { buildCity } from './city.js';
 import { createMinimap } from './minimap.js';
 import { createPedestrianCrowd } from './npc.js';
 import { createPropPhysics } from './prop-physics.js';
+import { settleOnGround } from './terrain.js';
 import { releaseRagdoll, startRagdoll, stepRagdolls } from './ragdoll.js';
 import { createTraffic } from './traffic.js';
 import { onLangChange, t } from './i18n.js';
@@ -191,6 +192,12 @@ export function createGame(canvas) {
     _mover.y = vehicle.y ?? 0;
     _mover.heading = vehicle.heading;
     return _mover;
+  }
+
+  // What the ground under the car is like to drive on.
+  const _surface = { height: 0, nx: 0, ny: 1, nz: 0, kind: '', grip: 1, drag: 1 };
+  function surfaceFeel(x, z) {
+    return world.terrain.surfaceAt(x, z, _surface);
   }
 
   // The static obstacles: everything in the world that is not a vehicle. It is
@@ -813,12 +820,7 @@ export function createGame(canvas) {
       const along = Math.sin(vehicle.heading) * vehicle.knockVX
         + Math.cos(vehicle.heading) * vehicle.knockVZ;
       vehicle.speed = Math.abs(along) > 0.15 ? along : 0;
-      vehicle.y = world.ground(vehicle.x, vehicle.z);
-      const nose = world.ground(
-        vehicle.x + Math.sin(vehicle.heading) * 3,
-        vehicle.z + Math.cos(vehicle.heading) * 3,
-      );
-      vehicle.pitch = -Math.atan2(nose - vehicle.y, 3);
+      settleOnGround(world.terrain, vehicle);
       vehicle.collider();
     }
   }
@@ -1429,16 +1431,30 @@ export function createGame(canvas) {
     const accel = throttle > 0 ? 9.5 : 7.5;
     hero.speed += throttle * accel * dt;
     if (hero.braking) hero.speed -= Math.sign(hero.speed) * 22 * dt;
-    const drag = throttle === 0 ? 2.1 : 0.35;
+    // The ground under the car decides how much of the engine's push it keeps,
+    // and how much speed it can reach at all. A surface that drags holds the
+    // car back in proportion to how fast it is going, which is what makes sand
+    // feel heavy: it is easy to creep along and hard to get any speed up.
+    const ground = surfaceFeel(hero.x, hero.z);
+    const grip = ground.grip;
+    // 1 on a road, so the numbers below are the ones the game was tuned on.
+    const surf = ground.drag;
+    const drag = (throttle === 0 ? 2.1 : 0.35) * surf;
     hero.speed -= Math.sign(hero.speed) * drag * dt;
+    // The extra bite of a loose surface, taken out in proportion to speed.
+    const slow = (surf - 1) * 0.16;
+    if (slow > 0) hero.speed -= hero.speed * slow * dt;
     if (throttle === 0 && !hero.braking && Math.abs(hero.speed) < 0.18) hero.speed = 0;
     hero.speed = THREE.MathUtils.clamp(hero.speed, -5.5, 16);
 
     const rolling = Math.abs(hero.speed) > 0.25;
     const speedFactor = THREE.MathUtils.clamp(Math.abs(hero.speed) / 2.4, 0, 1);
+    // The wheels bite less on sand, so the same steering input turns the car
+    // less: it ploughs on the way it was going instead of carving.
     const high = 1 / (1 + Math.abs(hero.speed) * 0.045);
     if (rolling) {
-      hero.heading += steerInput * 1.45 * speedFactor * high * (hero.speed >= 0 ? 1 : -1) * dt;
+      hero.heading += steerInput * 1.45 * speedFactor * high * grip
+        * (hero.speed >= 0 ? 1 : -1) * dt;
     }
     hero.steer = steerInput * 0.38;
     // Keep the first-person view pointed down the road; mouse look drifts back.
@@ -1491,13 +1507,7 @@ export function createGame(canvas) {
     if (hitCar) impactVehicle(hitCar);
     hero.collider();
 
-    const ahead = 3;
-    hero.y = world.ground(hero.x, hero.z);
-    const nose = world.ground(
-      hero.x + Math.sin(hero.heading) * ahead,
-      hero.z + Math.cos(hero.heading) * ahead,
-    );
-    hero.pitch = -Math.atan2(nose - hero.y, ahead);
+    settleOnGround(world.terrain, hero);
 
     // Only leave the car once it is slow enough, but keep the key pending so
     // a press while moving fast still works once the car has slowed down.

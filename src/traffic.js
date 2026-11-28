@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { colorOf } from './config.js';
 import { createVehicle } from './vehicle.js';
 import { blocked, obbHitsObb, vehicleBlockedBy } from './collision.js';
+import { settleOnGround } from './terrain.js';
 
 // Ambient cars circle the city blocks on the same lane network the city
 // builds. Like the pedestrian crowd, they only spawn and despawn off camera.
@@ -300,12 +301,7 @@ export function createTraffic({
     vehicle.z = point.z + vehicle.shoveZ;
     vehicle.heading = heading + vehicle.shoveYaw;
     vehicle.steer = clamp(turn * 2.2, -0.5, 0.5);
-    vehicle.y = world.ground(vehicle.x, vehicle.z);
-    const nose = world.ground(
-      vehicle.x + Math.sin(vehicle.heading) * 3,
-      vehicle.z + Math.cos(vehicle.heading) * 3,
-    );
-    vehicle.pitch = -Math.atan2(nose - vehicle.y, 3);
+    settleOnGround(world.terrain, vehicle);
     vehicle.collider();
 
     // A traffic car that runs into street furniture throws it out of the way

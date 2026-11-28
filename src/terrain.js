@@ -188,7 +188,117 @@ export function leanOn(normal, heading, out = { pitch: 0, roll: 0 }) {
   return out;
 }
 
-// Puts a vehicle on the ground under it and leans it to match.
+// How a car sits on the ground, worked out from its four wheels rather than
+// from one sample in the middle.
+//
+// One sample in the middle and a normal is what a plank of wood on a slope
+// does: it lies flat against the slope. A car does not, because it has four
+// wheels that each touch the ground where they are, and a spring at each
+// corner: going over a crest it rests on the middle of the ground and its
+// wheels reach for the ends, and a wheel that runs up a kerb lifts that corner
+// of the body alone.
+//
+// The wheels' heights fit a plane, and the plane gives the pitch and the roll.
+// The springs give the body a little travel on top of that, so a wheel that is
+// pressed further than the others pushes its corner up.
+//
+// Everything here is done in the car's own frame: the wheels are laid out along
+// its nose and its side, so the fit does not care which way it is pointing.
+
+// The four corners of the car, in its own frame: [forward, side]. The order is
+// front-left, front-right, back-left, back-right, which is the order the wheels
+// are built in.
+const WHEEL_CORNERS = [
+  [1, -1],
+  [1, 1],
+  [-1, -1],
+  [-1, 1],
+];
+
+// How much of a wheel's push the body takes, in metres of travel per metre the
+// wheel is pressed, and the most it can move. A car with a quarter of a metre of
+// travel is a soft one; a bus has less.
+function springTravel(vehicle) {
+  return Math.min(0.22, Math.max(0.1, (vehicle.width ?? 1.8) * 0.07));
+}
+
+export function sitOnWheels(terrain, vehicle, out) {
+  const fx = Math.sin(vehicle.heading);
+  const fz = Math.cos(vehicle.heading);
+  const rx = Math.cos(vehicle.heading);
+  const rz = -Math.sin(vehicle.heading);
+
+  const wheels = vehicle.wheels && vehicle.wheels.length === 4 ? vehicle.wheels : null;
+  const halfL = (vehicle.length ?? 4.2) / 2;
+  const halfW = (vehicle.width ?? 1.8) / 2;
+
+  // The ground under each wheel, and where each wheel is. The wheel's own mount
+  // point is the authority on where it is, because a bus and a hatchback do not
+  // put their wheels in the same place.
+  const heights = [];
+  let frontH = 0;
+  let backH = 0;
+  let leftH = 0;
+  let rightH = 0;
+  let trackSum = 0;
+  let baseSum = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const [along, across] = WHEEL_CORNERS[i];
+    const at = wheels ? wheels[i].at : null;
+    const localF = at ? at.z : along * halfL;
+    const localR = at ? at.x : across * halfW;
+    const wx = vehicle.x + fx * localF + rx * localR;
+    const wz = vehicle.z + fz * localF + rz * localR;
+    const h = terrain.heightAt(wx, wz);
+    heights.push(h);
+    if (along > 0) frontH += h;
+    else backH += h;
+    if (across < 0) leftH += h;
+    else rightH += h;
+    trackSum += Math.abs(localR);
+    baseSum += Math.abs(localF);
+  }
+  frontH /= 2;
+  backH /= 2;
+  leftH /= 2;
+  rightH /= 2;
+  // The real wheelbase and track, from where the wheels actually are.
+  const wheelBase = baseSum / 2;
+  const track = trackSum / 2;
+
+  // The body sits at the average of what is under its wheels. The pitch and the
+  // roll then tip it so that each corner follows its own patch of ground; using
+  // the highest wheel instead would lift the whole car by the drop across it,
+  // which on a hill is more than a metre.
+  //
+  // The height is the ground's, not the ground plus a sag: the car's own model
+  // already has the wheels under it, at `wheelY` above its origin, so the
+  // origin belongs on the ground. The springs show as the wheels moving up
+  // into their arches, not as the whole body sinking.
+  const average = heights.reduce((a, b) => a + b, 0) / 4;
+  const travel = springTravel(vehicle);
+  out.y = average;
+
+  const alongRise = frontH - backH;
+  const acrossRise = rightH - leftH;
+  // A rise at the front means the nose is up, which is a negative pitch in the
+  // car's own frame, the same convention the rest of the game uses.
+  out.pitch = -Math.atan2(alongRise, wheelBase);
+  out.roll = Math.atan2(acrossRise, track);
+
+  // Each wheel's spring: how far it is pressed up into the body, given where
+  // the body ended up. A wheel over higher ground is pressed further.
+  if (wheels) {
+    for (let i = 0; i < 4; i += 1) {
+      const at = wheels[i].at;
+      const restBottom = out.y + at.y - wheels[i].radius;
+      const press = heights[i] - restBottom;
+      wheels[i].travel = Math.max(0, Math.min(travel, press));
+      wheels[i].grounded = press > -travel * 1.5;
+    }
+  }
+  return out;
+}
 //
 // The height is no longer taken straight from the ground. A car carries its own
 // vertical speed, so that driving off the top of the hill carries it into the
@@ -207,14 +317,16 @@ export function leanOn(normal, heading, out = { pitch: 0, roll: 0 }) {
 //
 // `dt` of zero means "put it on the ground and leave it", which is what laying
 // out the map and resetting the game want.
-const _lean = { pitch: 0, roll: 0 };
-const _normal = { x: 0, y: 1, z: 0 };
+const _sit = { pitch: 0, roll: 0, y: 0 };
 export function settleOnGround(terrain, vehicle, dt = 0) {
-  const ground = terrain.heightAt(vehicle.x, vehicle.z);
-  terrain.normalAt(vehicle.x, vehicle.z, _normal);
-  leanOn(_normal, vehicle.heading, _lean);
-  vehicle.pitch = _lean.pitch;
-  vehicle.groundRoll = _lean.roll;
+  // Where the car sits, from its four wheels rather than from the ground under
+  // its middle. `ground` is the height the body would be at if its wheels were
+  // all on level ground; the pitch and the roll come from how far apart the
+  // wheels' own patches of ground are.
+  sitOnWheels(terrain, vehicle, _sit);
+  const ground = _sit.y;
+  vehicle.pitch = _sit.pitch;
+  vehicle.groundRoll = _sit.roll;
 
   if (!dt) {
     vehicle.y = ground;

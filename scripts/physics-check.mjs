@@ -143,12 +143,19 @@ function check(label, ok, detail = '') {
   };
   const terrain = createTerrain({ height: hill });
 
-  function drive(speed) {
-    const car = {
-      x: 0, z: 6, heading: Math.PI, y: 0, vy: 0, airborne: false,
-      pitch: 0, groundRoll: 0,
-    };
+  const { createVehicle } = await import('../src/vehicle.js');
+  function makeCar() {
+    // A real car, with real wheels: the height and the lean come from where its
+    // wheels are, not from its middle, so a stand-in without wheels would be
+    // testing a different thing.
+    const car = createVehicle({ type: 'sedan', color: 0x888888, x: 0, z: 6 });
+    car.heading = Math.PI;
     settleOnGround(terrain, car, 0);
+    return car;
+  }
+
+  function drive(speed) {
+    const car = makeCar();
     let air = 0;
     let peak = 0;
     let takeoffVy = 0;
@@ -161,9 +168,14 @@ function check(label, ok, detail = '') {
       if (car.airborne) {
         air += 1;
         peak = Math.max(peak, car.y - hill(0, car.z));
-      } else if (car.z > -10 && Math.abs(car.y - hill(0, car.z)) > 0.01) {
-        // While climbing, the car is on the ground, not floating or sunk.
-        climbedOnGround = false;
+      } else if (car.z > -9 && car.z < -1) {
+        // Well up the climb, where the ground is a steady slope and the car is
+        // wholly on it: the body has to be where the ground is, within the drop
+        // across its own wheelbase. Right at the foot and the crest it is
+        // straddling a change of grade and its four wheels average out to
+        // something other than the height under its middle, which is right.
+        const drop = Math.abs(car.y - hill(0, car.z));
+        if (drop > 0.5) climbedOnGround = false;
       }
     }
     return { air, peak, takeoffVy, climbedOnGround };
@@ -183,11 +195,7 @@ function check(label, ok, detail = '') {
 
   // It comes down again, and is on the ground at the end of the run.
   {
-    const car = {
-      x: 0, z: 6, heading: Math.PI, y: 0, vy: 0, airborne: false,
-      pitch: 0, groundRoll: 0,
-    };
-    settleOnGround(terrain, car, 0);
+    const car = makeCar();
     for (let f = 0; f < 400; f += 1) {
       car.z -= 12 * dt;
       settleOnGround(terrain, car, dt);
@@ -195,6 +203,59 @@ function check(label, ok, detail = '') {
     check('a car that went over a crest comes back down', !car.airborne,
       `z ${car.z.toFixed(1)}, y ${car.y.toFixed(2)}`);
   }
+}
+
+// A car sits on its wheels, not on the ground under its middle.
+//
+// Each of the four wheels looks at the ground where it is, and the body's pitch
+// and roll come from how the four wheel heights differ. That is what makes a
+// car lean across a kerb instead of lying flat on it, and what lets one corner
+// lift without the whole body following.
+{
+  const { createTerrain, settleOnGround } = await import('../src/terrain.js');
+  const { createVehicle } = await import('../src/vehicle.js');
+  const deg = (r) => (r * 180) / Math.PI;
+
+  // A slope climbing 20% towards -Z. Driving straight at it, the car's pitch
+  // has to be the angle of the slope, whichever way it is worked out.
+  const slope = createTerrain({ height: (x, z) => z * 0.2 });
+  const car = createVehicle({ type: 'sedan', color: 0x888888, x: 0, z: 0 });
+  car.heading = Math.PI;
+  // The ground climbs towards +Z, so a car facing -Z is going downhill and its
+  // nose is low: a positive pitch. The angle is the slope's own.
+  const wantPitch = Math.atan(0.2);
+  settleOnGround(slope, car, 0);
+  check('a car on a slope leans by the angle of the slope',
+    Math.abs(Math.abs(car.pitch) - wantPitch) < 1e-6 && car.pitch > 0,
+    `${deg(car.pitch).toFixed(2)} deg, the slope is ${deg(wantPitch).toFixed(2)} deg`);
+  check('a car on a slope is not rolled across it',
+    Math.abs(car.groundRoll) < 1e-6);
+
+  // Flat ground: level, and at the height of the ground.
+  const flat = createTerrain({ height: () => 3 });
+  car.heading = 0;
+  settleOnGround(flat, car, 0);
+  check('a car on flat ground is level',
+    Math.abs(car.pitch) < 1e-9 && Math.abs(car.groundRoll) < 1e-9);
+  check('a car on flat ground is on the ground',
+    Math.abs(car.y - 3) < 1e-9, `y ${car.y.toFixed(3)}`);
+
+  // A step under the left wheels only. The car has to roll, and the springs on
+  // that side have to be pressed.
+  const kerb = createTerrain({ height: (x) => (x < 0 ? 0.4 : 0) });
+  car.x = 0;
+  car.heading = 0;
+  settleOnGround(kerb, car, 0);
+  check('a car straddling a kerb rolls away from it',
+    Math.abs(car.groundRoll) > 0.1, `${deg(car.groundRoll).toFixed(1)} deg`);
+  const wheelTravels = car.wheels.map((w) => w.travel);
+  const left = [wheelTravels[0], wheelTravels[2]];
+  const right = [wheelTravels[1], wheelTravels[3]];
+  check('the wheels on the step are pressed further than the others',
+    Math.min(...left) > Math.max(...right),
+    `left ${left.map((t) => t.toFixed(2)).join('/')} right ${right.map((t) => t.toFixed(2)).join('/')}`);
+  check('no wheel is pressed beyond its travel',
+    Math.max(...wheelTravels) <= 0.25, `${Math.max(...wheelTravels).toFixed(3)} m`);
 }
 
 console.log(failures === 0 ? 'OK' : `${failures} failures`);

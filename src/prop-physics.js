@@ -197,10 +197,17 @@ export function createPropPhysics({ colliders, ground, onLand = null }) {
     // The prop tumbles about the axis across the direction it is travelling,
     // so it rolls the way it was hit instead of flailing. A post is bolted at
     // the foot: it turns over slowly rather than spinning away.
+    //
+    // The twist about the vertical is taken from the prop's own place on the
+    // map rather than from `Math.random`, so a given hit comes out the same
+    // way every time: a replay, a check, or the same crash happening twice
+    // should not look different each time. It is still varied from prop to
+    // prop, and from spot to spot, so a row of bins does not tumble in unison.
     const spin = Math.min(spec.maxSpin ?? 9, speed * (spec.spin ?? 0.7));
+    const twist = twistAt(entry.group.position.x, entry.group.position.z);
     body.angularVelocity.set(
       -dirZ * spin,
-      (Math.random() - 0.5) * (spec.twist ?? 0.8),
+      twist * (spec.twist ?? 0.8),
       dirX * spin,
     );
     body.wakeUp();
@@ -710,6 +717,14 @@ function shapeTurn(rot) {
   const turn = new CANNON.Quaternion();
   if (rot) turn.setFromEuler(rot[0], rot[1], rot[2]);
   return turn;
+}
+
+// A number between -0.5 and 0.5 that depends only on where the prop is. The
+// same prop hit from the same place tumbles the same way every time, but two
+// props side by side do not tumble alike.
+function twistAt(x, z) {
+  const n = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+  return (n - Math.floor(n)) - 0.5;
 }
 
 const _quat = new THREE.Quaternion();

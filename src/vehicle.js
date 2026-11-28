@@ -133,7 +133,21 @@ function addWheel(parent, x, y, z, front, scale = 1) {
   roller.add(mesh);
   steer.add(roller);
   parent.add(steer);
-  return { steer, roller, front, radius: 0.34 * scale };
+  // Where the wheel hangs off the body, in the body's own frame. The suspension
+  // needs it: every wheel looks at the ground under itself, so the car has to
+  // know where its wheels are.
+  return {
+    steer,
+    roller,
+    front,
+    radius: 0.34 * scale,
+    at: { x, y, z },
+    // How far the wheel is pushed up from its rest position by the ground under
+    // it, in metres. Zero is sitting on its stop, at rest.
+    travel: 0,
+    // Whether the ground is under it at all.
+    grounded: true,
+  };
 }
 
 function wheelY(scale = 1) {
@@ -1544,6 +1558,13 @@ export function createVehicle(cfg) {
       for (const wheel of this.wheels) {
         wheel.roller.rotation.x += (this.speed / wheel.radius) * dt;
         if (wheel.front) wheel.steer.rotation.y = this.steer;
+        // The spring: a wheel pressed up by the ground under it sits higher in
+        // its arch. The body has been tipped to match, so this is the last of
+        // the travel rather than the whole of it - what is left over is the
+        // small difference between one wheel and another.
+        if (wheel.at && wheel.travel !== undefined) {
+          wheel.steer.position.y = wheel.at.y + wheel.travel;
+        }
       }
       if (this.steering) this.steering.rotation.z = -this.steer * 1.7;
       const glowAmount = this.braking ? 1.6 : 0.28;
